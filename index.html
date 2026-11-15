@@ -3626,6 +3626,20 @@ function gameTeams() {
   for (const k of ['a', 'b']) GAME.teams[k].players = GAME.teams[k].players.filter(p => GAME.players.includes(p));
   return GAME.teams;
 }
+/* Spieler zufällig oder ausgeglichen (Gesamtwertung / Elo) auf Team A und B verteilen */
+function splitTeams(basis) {
+  const T = gameTeams(), pl = [...GAME.players];
+  let st = {};
+  if (basis === 'gw') { const c = (S.pub.categories.find(x => !x.duo && /0[,.]33/.test(x.name)) || S.pub.categories[0] || {}).id; st = Object.fromEntries(overall({mode: 'avg', per: 'all', cat: c}).rows.map(r => [r.pid, r.sum])); }
+  if (basis === 'elo' && window.TOUR) st = Object.fromEntries(Object.entries(TOUR.elo()).map(([p, x]) => [p, x.r]));
+  const known = Object.values(st).sort((a, b) => a - b), med = known.length ? known[Math.floor(known.length / 2)] : 0;
+  const val = p => basis === 'rand' ? Math.random() : (st[p] ?? med) + Math.random() * (basis === 'elo' ? 30 : 8);
+  const order = pl.map(p => [p, val(p)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+  const A = [], B = [];
+  order.forEach((p, i) => ((i % 4 === 0 || i % 4 === 3) ? A : B).push(p));      // Schlange: A B B A A B B A …
+  if (Math.random() < .5) { T.a.players = A; T.b.players = B; } else { T.a.players = B; T.b.players = A; }
+  GAME.win = '';
+}
 const teamOf = p => !GAME.teamsOn || !GAME.teams ? '' : GAME.teams.a.players.includes(p) ? 'a' : GAME.teams.b.players.includes(p) ? 'b' : '';
 const hitsOf = p => [...(S.local[p] || '')].filter(c => c === '1').length;
 /* Team-Treffer: alle Treffer des eigenen Teams (ohne Teams: aller Spieler) in diesem Spiel */
@@ -3664,7 +3678,8 @@ function gamePlay() {
       ${GAME.ext && !GAME.teamsOn ? `<div class="field"><label>Gegner (optional)</label><input class="inp" id="extN" value="${esc(GAME.extName || '')}" placeholder="z. B. Team Bierpiraten"></div><p class="hint" style="margin-top:-4px">Alle Spieler hier sind ein Team. Zählt für Siege & Statistik, nicht für die Elo.</p>` : ''}
       ${GAME.teamsOn ? `<div class="two"><div class="field"><label><span class="tdot a"></span>Team A</label><input class="inp" id="tgA" value="${esc(T.a.name)}"></div><div class="field"><label><span class="tdot b"></span>Team B</label><input class="inp" id="tgB" value="${esc(T.b.name)}"></div></div>
         ${old.length && !GAME.tm ? `<div class="field"><label>Altes Team übernehmen</label><select class="inp" id="tgOld"><option value="">–</option>${old.map((o, i) => `<option value="${i}">${esc(o.name)} (${esc(o.players.map(gameName).join(', '))})</option>`).join('')}</select></div>` : ''}
-        <p class="hint" style="margin:0 0 4px">Links bei jedem Spieler auf A/B tippen, um ihn einem Team zuzuordnen.</p>` : ''}
+        ${GAME.tm ? '' : `<div class="ctl" style="margin:0 0 6px"><label>🎲 Teams auslosen</label><div class="seg" id="tgRand"><button data-v="rand">Zufall</button><button data-v="gw">Wertung</button><button data-v="elo">Elo</button></div></div>`}
+        <p class="hint" style="margin:0 0 4px">„Wertung“ und „Elo“ verteilen die Stärksten gleichmäßig. Danach links bei jedem Spieler auf A/B tippen, um zu tauschen.</p>` : ''}
       <p class="hint" style="margin:2px 0 4px">🍺 fertig = Bier leer: übernimmt die Treffer des Teams seit Beginn dieses Biers (antippen zum Ändern).</p>
       <div id="rows">${GAME.players.map(row).join('')}</div>
       <div id="tgWrap">${winHtml()}</div>
@@ -3690,6 +3705,7 @@ function gamePlay() {
   };
   const names = () => { if (!$('#tgA')) return; const T = GAME.teams; T.a.name = $('#tgA').value.trim().slice(0, 40) || 'Team A'; T.b.name = $('#tgB').value.trim().slice(0, 40) || 'Team B'; saveGame(); };
   const wire = () => {
+    if ($('#tgRand')) $('#tgRand').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; names(); splitTeams(b.dataset.v); saveGame(); refresh(); toast('Teams ausgelost ✓'); };
     if ($('#gMode')) $('#gMode').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; GAME.teamsOn = b.dataset.v === 'teams'; GAME.ext = b.dataset.v === 'ext'; GAME.win = ''; GAME.extWin = ''; saveGame(); const y = $('#sheetBody').scrollTop; draw(); $('#sheetBody').scrollTop = y; };
     if ($('#extN')) $('#extN').oninput = e => { GAME.extName = e.target.value.trim().slice(0, 40); saveGame(); };
     if ($('#tgA')) $('#tgA').oninput = $('#tgB').oninput = () => { names(); $('#sheetBody').querySelectorAll('#tgW [data-w]').forEach(b => { b.querySelector('b').textContent = GAME.teams[b.dataset.w].name; }); };
