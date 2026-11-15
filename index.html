@@ -308,6 +308,10 @@ nav.tabs button{font-size:11px;min-width:0}
 body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility:hidden}
 .ytour{display:flex;align-items:center;gap:8px;margin-top:8px}.ytour label{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap}.ytour .inp{flex:1;padding:8px 10px}
 .grow2 .ic{font-size:18px}
+/* Stoppuhr: Start/Stopp mittig auf dem Bildschirm, groß zum Treffen */
+.sw{min-height:58vh;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.swgo{height:150px !important;font-size:36px !important;border-radius:24px !important;margin-top:12px !important;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.swd{font-size:72px !important}
 </style>
 </head>
 <body>
@@ -3026,10 +3030,12 @@ function deleteThrows(pub, pid, start, len, expect, k = 'n') {
   const out = list.map(c => ({...c, s: c.s.join('')})).filter(c => c.s);
   if (out.length) pub.throws[pid] = out; else delete pub.throws[pid];
 }
-function addChunk(pub, pid, d, s, by, k = 'n', tid) {
+function addChunk(pub, pid, d, s, by, k = 'n', tid, gid) {
   const list = chunks(pub, pid).map(c => ({...c}));
   const last = list[list.length - 1], tt = k === 't' && tid ? tid : undefined;
-  if (last && last.d === d && (last.by || '') === (by || '') && kindOf(last) === k && (last.t || undefined) === tt) last.s += s; else list.push({d, s, ...(by ? {by} : {}), ...(k === 't' ? {k: 't'} : {}), ...(tt ? {t: tt} : {})});
+  // Würfe aus einem Spiel bekommen die Spiel-ID (g) – so lassen sie sich beim Löschen des Spiels mit entfernen
+  if (last && !gid && !last.g && last.d === d && (last.by || '') === (by || '') && kindOf(last) === k && (last.t || undefined) === tt) last.s += s;
+  else list.push({d, s, ...(by ? {by} : {}), ...(k === 't' ? {k: 't'} : {}), ...(tt ? {t: tt} : {}), ...(gid ? {g: gid} : {})});
   pub.throws[pid] = list;
 }
 
@@ -3335,10 +3341,36 @@ function gameRow(g) {
   const head = g.a ? `${esc(g.a.name)} vs ${esc(g.b.name)}${g.w ? ' · 🏆 ' + esc(g[g.w].name) : ''}` : g.vs ? `🆚 ${esc(g.vs.name || 'anderes Team')}${g.vs.w ? ' · ' + (g.vs.w === 'w' ? '🏆 Sieg' : 'Niederlage') : ''}` : 'Training ohne Teams';
   return `<div class="row grow2" data-g="${g.id}"><span class="ic">${g.k === 't' ? '🏆' : '🎯'}</span><span class="nm" style="white-space:normal">${head}<small>${fmtD(g.d)} · ${esc(pl.map(nameOf).join(', '))}${n ? ' · ' + h + '/' + n + ' Treffer' : ''}</small></span>${can('delete') ? `<span class="trash" data-gdel="${g.id}" title="Spiel löschen">🗑</span>` : ''}</div>`;
 }
+/* Würfe eines Spiels aus der Wurfstatistik entfernen. Neue Spiele: über die Spiel-ID (g).
+   Ältere Spiele (vor der Kennzeichnung): die letzten n Würfe des passenden Eintrags vom selben Tag, wenn Anzahl und Treffer übereinstimmen. */
+function removeGameThrows(pub, g) {
+  let removed = 0, missed = 0;
+  for (const pid of gPlayers(g)) {
+    const list = chunks(pub, pid); if (!list.length) continue;
+    const tagged = list.filter(c => c.g === g.id);
+    if (tagged.length) { removed += tagged.reduce((a, c) => a + c.s.length, 0); pub.throws[pid] = list.filter(c => c.g !== g.id); continue; }
+    const st = (g.s || {})[pid]; if (!st || !st.n) continue;
+    const k = g.k === 't' ? 't' : 'n';
+    const idx = [...list.keys()].reverse().find(i => { const c = list[i]; return !c.g && c.d === g.d && kindOf(c) === k && (c.by || '') === (g.by || '') && c.s.length >= st.n && [...c.s.slice(-st.n)].filter(x => x === '1').length === st.h; });
+    if (idx == null) { missed++; continue; }
+    const c = {...list[idx], s: list[idx].s.slice(0, -st.n)}, nl = list.map((x, i) => i === idx ? c : x).filter(x => x.s.length);
+    pub.throws[pid] = nl; removed += st.n;
+  }
+  return {removed, missed};
+}
 async function deleteGame(id, after) {
   const g = (S.pub.games || []).find(x => x.id === id); if (!g) return;
-  if (!confirm(`Dieses Spiel vom ${fmtD(g.d)} löschen?\nDie Würfe bleiben in der Wurfstatistik erhalten.`)) return;
-  await guarded(async () => { await save('Spiel gelöscht', ctx => { ctx.pub.games = (ctx.pub.games || []).filter(x => x.id !== id); }, {okText: 'Spiel gelöscht ✓'}); after && after(); });
+  if (!confirm(`Dieses Spiel vom ${fmtD(g.d)} löschen?\nAlle Würfe, Strafbiere und Biere aus diesem Spiel werden ebenfalls aus den Statistiken entfernt.`)) return;
+  let res = null;
+  await guarded(async () => {
+    await save('Spiel gelöscht (mit Würfen)', ctx => {
+      const gg = (ctx.pub.games || []).find(x => x.id === id); if (!gg) throw new Error('Das Spiel gibt es nicht mehr.');
+      res = removeGameThrows(ctx.pub, gg);
+      ctx.pub.games = ctx.pub.games.filter(x => x.id !== id);
+    }, {quiet: true});
+    toast(res && res.missed ? `Spiel gelöscht ✓ – bei ${res.missed} Spieler(n) konnten die Würfe nicht zugeordnet werden, bitte im Profil prüfen` : `Spiel gelöscht ✓${res && res.removed ? ' inkl. ' + res.removed + ' Würfe' : ''}`);
+    after && after();
+  });
 }
 function wireGameRows(el, after) { el.querySelectorAll('[data-gdel]').forEach(b => b.onclick = e => { e.stopPropagation(); deleteGame(b.dataset.gdel, after); }); }
 function allGamesSheet() {
@@ -3724,8 +3756,8 @@ function matchPayload() {
 }
 /* Spiel in die Daten übernehmen (direkt oder bei der Freigabe) */
 function applyMatch(ctx, m, fix, by) {
-  const ok = p => !!ctx.pub.people[p];
-  for (const [ref, s] of Object.entries(m.data || {})) { const pid = fix(ref); if (ok(pid)) addChunk(ctx.pub, pid, m.d, s, by, m.k === 't' ? 't' : 'n', m.tid); }
+  const ok = p => !!ctx.pub.people[p], gid = rid('s');
+  for (const [ref, s] of Object.entries(m.data || {})) { const pid = fix(ref); if (ok(pid)) addChunk(ctx.pub, pid, m.d, s, by, m.k === 't' ? 't' : 'n', m.tid, gid); }
   const players = [...new Set(m.players.map(fix).filter(ok))];
   if (!players.length) return;
   const st = {};
@@ -3736,7 +3768,7 @@ function applyMatch(ctx, m, fix, by) {
     if (((m.tb || {})[ref] || []).length) x.tb = m.tb[ref];
     st[pid] = x;
   }
-  const rec = {id: rid('s'), d: m.d, k: m.k === 't' ? 't' : 'n', ...(m.tid ? {t: m.tid} : {}), players, s: st, by};
+  const rec = {id: gid, d: m.d, k: m.k === 't' ? 't' : 'n', ...(m.tid ? {t: m.tid} : {}), players, s: st, by};
   if (m.teams) {
     const tm = x => ({name: x.name, players: x.players.map(fix).filter(ok)});
     const a = tm(m.teams.a), b = tm(m.teams.b);
