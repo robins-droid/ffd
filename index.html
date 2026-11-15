@@ -319,6 +319,9 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .tsz{display:grid;grid-template-columns:72px 1fr 54px;gap:8px;align-items:center;padding:5px 0;font-size:13px}.tsz small{grid-column:2/4;color:var(--muted);margin-top:-4px;font-size:11px}.tsz b{text-align:right;color:var(--gold2)}
 .chart .band{fill:var(--gold);opacity:.10}.legend .lb{display:inline-block;width:14px;height:8px;background:var(--gold);opacity:.25;border-radius:2px;margin-right:4px;vertical-align:middle}
 .pvis{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.pvis>span{font-size:14px;font-weight:600}.pvis .seg button{font-size:13px;padding:7px 4px}
+.blk.click{cursor:pointer}.blk.click:active{background:rgba(255,255,255,.04)}
+.wedit{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}.wedit button{position:relative;height:58px;border:0;border-radius:14px;font-size:24px;font-weight:900;color:#fff}
+.wedit button.h{background:#2e9e5b}.wedit button.m{background:var(--bad)}.wedit small{position:absolute;top:3px;left:6px;font-size:10px;font-weight:600;opacity:.8}
 </style>
 </head>
 <body>
@@ -3118,6 +3121,21 @@ function deleteThrows(pub, pid, start, len, expect, k = 'n') {
   const out = list.map(c => ({...c, s: c.s.join('')})).filter(c => c.s);
   if (out.length) pub.throws[pid] = out; else delete pub.throws[pid];
 }
+/* Würfe [start, start+len) durch eine gleich lange neue Folge ersetzen (Treffer/Daneben korrigieren) */
+function setThrows(pub, pid, start, expect, repl, k = 'n') {
+  const list = chunks(pub, pid).map(c => ({...c, s: [...c.s]}));
+  const pos = [];
+  list.forEach((c, ci) => { if (inYear(c.d) && kindOf(c) === k) c.s.forEach((_, j) => pos.push([ci, j])); });
+  const sel = pos.slice(start, start + expect.length);
+  if (sel.map(([ci, j]) => list[ci].s[j]).join('') !== expect || repl.length !== expect.length) throw new Error('Die Würfe haben sich inzwischen geändert – bitte neu laden und nochmal versuchen.');
+  sel.forEach(([ci, j], i) => { list[ci].s[j] = repl[i]; });
+  pub.throws[pid] = list.map(c => ({...c, s: c.s.join('')}));
+  // Treffer im zugehörigen Spiel mitkorrigieren
+  for (const gid of new Set(sel.map(([ci]) => list[ci].g).filter(Boolean))) {
+    const g = (pub.games || []).find(x => x.id === gid), st = g && (g.s || {})[pid];
+    if (st) st.h = pub.throws[pid].filter(c => c.g === gid).reduce((a, c) => a + [...c.s].filter(x => x === '1').length, 0);
+  }
+}
 function addChunk(pub, pid, d, s, by, k = 'n', tid, gid) {
   const list = chunks(pub, pid).map(c => ({...c}));
   const last = list[list.length - 1], tt = k === 't' && tid ? tid : undefined;
@@ -3556,6 +3574,21 @@ function allGamesSheet() {
   openSheet(`<h2>🎯 Alle Spiele</h2><p class="sub">${L.length} Spiele · ${S.year === 'all' ? 'alle Jahre' : yLbl('')}${can('delete') ? ' · 🗑 zum Löschen' : ''}</p><div class="list">${L.map(gameRow).join('') || '<div class="empty">Noch keine Spiele</div>'}</div>`);
   wireGameRows($('#sheetBody'), allGamesSheet);
 }
+/* Einzelne Würfe einer Statistik korrigieren (antippen = Treffer ↔ daneben) */
+function blockEditSheet(pid, kind, start, orig, title) {
+  let cur = [...orig];
+  const draw = () => {
+    const h = cur.filter(c => c === '1').length;
+    openSheet(`<div class="game"><h2>${esc(title)}</h2><p class="sub">${esc(nameOf(pid))} · ${kind === 't' ? 'Turnier' : 'Training'} · Wurf antippen, um zwischen ✓ Treffer und ✗ daneben zu wechseln.</p>
+      <div class="wedit">${cur.map((c, i) => `<button data-i="${i}" class="${c === '1' ? 'h' : 'm'}"><small>${i + 1}</small>${c === '1' ? '✓' : '✗'}</button>`).join('')}</div>
+      <p class="hint">${h}/${cur.length} Treffer (${fmtP(h / cur.length * 100)})${cur.join('') !== orig ? ' · vorher ' + [...orig].filter(c => c === '1').length + '/' + orig.length : ''}</p>
+      <div class="err" id="err"></div><button class="btn pri" id="go" ${cur.join('') === orig ? 'disabled' : ''}>Speichern</button><button class="btn ghost" id="bk">‹ Zurück zum Profil</button></div>`);
+    $('#sheetBody').querySelector('.wedit').onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; const i = +b.dataset.i; cur[i] = cur[i] === '1' ? '0' : '1'; draw(); };
+    $('#bk').onclick = () => profileSheet(pid, null, true);
+    $('#go').onclick = () => guarded(async () => { await save('Würfe korrigiert (' + title + ')', ctx => setThrows(ctx.pub, pid, start, orig, cur.join(''), kind), {okText: 'Korrigiert ✓'}); profileSheet(pid, null, true); }, $('#err'));
+  };
+  draw();
+}
 /* Interne Notizen zu einer Person – nur für Admin und Freigeber mit dem Recht „Interne Notizen“ */
 function notesCard(pid) {
   if (!can('notes') || !(S.KT || isAdmin())) return '';
@@ -3701,8 +3734,8 @@ function profileSheet(pid, focusCat, focusThrows) {
       <div class="bigstat"><div><b>${fmtP(x.pct)}</b><span>Gesamt (${x.hits}/${x.total})</span></div><div><b>${fmtP(x.avg)}</b><span>Ø pro Statistik</span></div><div><b>${fmtP(x.best)}</b><span>Beste</span></div></div>
       ${lineChart(bpts, {fmt: v => Math.round(v) + ' %', minY: 0, maxY: 100, band: x.bp.length >= 3 && seeSec('kons') ? [x.avg - sdev(x.bp), x.avg + sdev(x.bp)] : null})}
       ${k === 't' ? perTour(pid) : ''}
-      ${x.cur.length ? `<div class="blk"><span class="n">Laufend</span><span class="b"><div class="bar"><i style="width:${x.cur.length / x.N * 100}%;background:var(--muted)"></i></div></span><span class="v">${x.curHits}/${x.cur.length} von ${x.N}</span>${adm ? `<span class="trash" data-blk="cur" title="Löschen">🗑</span>` : ''}</div>` : ''}
-      ${x.blocks.map((b, i) => ({i: i + 1, ...b})).reverse().map(b => `<div class="blk"><span class="n">Stat. ${b.i}<br><small>${fmtD(b.d)}</small></span><span class="b"><div class="bar"><i style="width:${b.hits / b.n * 100}%"></i></div></span><span class="v">${fmtP(b.hits / b.n * 100)} <small style="color:var(--muted);font-weight:400">${b.hits}/${b.n}</small></span>${adm ? `<span class="trash" data-blk="${b.i - 1}" title="Löschen">🗑</span>` : ''}</div>`).join('')}
+      ${x.cur.length ? `<div class="blk ${adm ? 'click' : ''}" data-edit="cur"><span class="n">Laufend</span><span class="b"><div class="bar"><i style="width:${x.cur.length / x.N * 100}%;background:var(--muted)"></i></div></span><span class="v">${x.curHits}/${x.cur.length} von ${x.N}</span>${adm ? `<span class="trash" data-blk="cur" title="Löschen">🗑</span>` : ''}</div>` : ''}
+      ${x.blocks.map((b, i) => ({i: i + 1, ...b})).reverse().map(b => `<div class="blk ${adm ? 'click' : ''}" data-edit="${b.i - 1}"><span class="n">Stat. ${b.i}<br><small>${fmtD(b.d)}</small></span><span class="b"><div class="bar"><i style="width:${b.hits / b.n * 100}%"></i></div></span><span class="v">${fmtP(b.hits / b.n * 100)} <small style="color:var(--muted);font-weight:400">${b.hits}/${b.n}</small></span>${adm ? `<span class="trash" data-blk="${b.i - 1}" title="Löschen">🗑</span>` : ''}</div>`).join('')}
     </div>`; };
   const throwsHtml = (seeSec('thr') ? tcard('n') : '') + (seeSec('thrT') ? tcard('t') : '') + (seeSec('kons') ? konsCard(pid) : '');
   const p = S.pub.people[pid];
@@ -3710,7 +3743,7 @@ function profileSheet(pid, focusCat, focusThrows) {
     <div class="two" style="margin-bottom:8px">${seeSec('cmp') ? '<button class="btn ghost" id="cmpBtn" style="margin:0">⚖️ Vergleichen</button>' : '<span></span>'}<button class="btn ghost" id="nickBtn" style="margin:0">🏷️ Spitzname ${can('people') ? 'ändern' : 'vorschlagen'}</button></div>
     ${notesCard(pid)}${spielCard(pid)}${window.TOUR && seeSec('tour') ? TOUR.tProfileHtml(pid) : ''}${seeSec('ex') ? cats : ''}${throwsHtml}${!cats && !throwsHtml ? '<div class="empty">Keine Einträge' + (S.year !== 'all' ? ' ' + yLbl() : '') + '</div>' : ''}
     <button class="btn pri" id="enter">${canDirect() ? 'Würfe eintragen' : 'Würfe vorschlagen'}</button>
-    ${adm ? `<button class="btn danger" id="undo" ${throwStr(S.pub, pid).length ? '' : 'disabled'}>Letzten gespeicherten Wurf löschen</button>` : ''}`);
+`);
   const body = $('#sheetBody'); wireCharts(body);
   if ($('#cmpBtn')) $('#cmpBtn').onclick = () => compareSheet(pid);
   $('#nickBtn').onclick = () => can('people') ? personEditSheet(pid) : nickSheet(pid);
@@ -3732,7 +3765,13 @@ function profileSheet(pid, focusCat, focusThrows) {
     if (!t || !confirm(`Diese Zeit löschen?\n${fmtT(t.t)} am ${fmtD(t.d)}`)) return;
     guarded(async () => { await save('Zeit gelöscht', ctx => { ctx.pub.times = ctx.pub.times.filter(y => y.id !== t.id); }, {okText: 'Gelöscht ✓'}); profileSheet(pid, t.c); });
   });
-  if (adm) body.querySelectorAll('[data-blk]').forEach(el => el.onclick = () => {
+  if (adm) body.querySelectorAll('[data-edit]').forEach(el => el.onclick = e => {
+    if (e.target.closest('[data-blk]')) return;
+    const kind = el.closest('[data-k]').dataset.k, x = X[kind], k = el.dataset.edit;
+    const start = k === 'cur' ? x.blocks.length * x.N : +k * x.N, len = k === 'cur' ? x.cur.length : x.N;
+    blockEditSheet(pid, kind, start, x.s.slice(start, start + len), k === 'cur' ? 'Laufende Statistik' : 'Statistik ' + (+k + 1));
+  });
+  if (adm) body.querySelectorAll('[data-blk]').forEach(el => el.onclick = ev => { ev.stopPropagation();
     const kind = el.closest('[data-k]').dataset.k, x = X[kind];
     const k = el.dataset.blk, start = k === 'cur' ? x.blocks.length * x.N : +k * x.N;
     const len = k === 'cur' ? x.cur.length : x.N, expect = x.s.slice(start, start + len);
@@ -3744,15 +3783,6 @@ function profileSheet(pid, focusCat, focusThrows) {
     });
   });
   $('#enter').onclick = () => gameSheet([pid]);
-  if (adm) $('#undo').onclick = () => guarded(async () => {
-    if (!confirm('Den letzten gespeicherten Wurf löschen?')) return;
-    await save('Wurf gelöscht', ctx => {
-      const list = chunks(ctx.pub, pid).map(c => ({...c})); if (!list.length) throw new Error('Keine Würfe vorhanden.');
-      const last = list[list.length - 1]; last.s = last.s.slice(0, -1); if (!last.s) list.pop();
-      if (list.length) ctx.pub.throws[pid] = list; else delete ctx.pub.throws[pid];
-    });
-    profileSheet(pid, null, true);
-  });
 }
 
 /* ---------- Spielmodus: jedes Spiel einzeln (Würfe, Teams, Sieger, Strafbiere, Team-Treffer pro Bier) ---------- */
