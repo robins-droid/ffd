@@ -1,0 +1,389 @@
+{
+ "id": "u8dad4653a9",
+ "name": "Test",
+ "d": "2026-11-15",
+ "sport": "flunkyball",
+ "type": "real",
+ "status": "groups",
+ "cfg": {
+  "groups": true,
+  "size": 4,
+  "adv": 2,
+  "byes": false,
+  "rr": 1,
+  "tiebreak": [
+   "h2h",
+   "diff",
+   "pts"
+  ],
+  "ko": "single",
+  "reset": false,
+  "third": false,
+  "seeding": false,
+  "score": "winner",
+  "fields": 2
+ },
+ "teams": [
+  {
+   "id": "md7ba063d91",
+   "name": "Team 1",
+   "players": [
+    "p115"
+   ]
+  },
+  {
+   "id": "m2202b0c284",
+   "name": "Team 2",
+   "players": [
+    "p037"
+   ]
+  },
+  {
+   "id": "m06e4a9e973",
+   "name": "Team 3",
+   "players": [
+    "p109"
+   ]
+  },
+  {
+   "id": "m7bc2a5ac0f",
+   "name": "Team 4",
+   "players": [
+    "p015"
+   ]
+  },
+  {
+   "id": "m024a74590f",
+   "name": "Team 5",
+   "players": [
+    "p021"
+   ]
+  },
+  {
+   "id": "m5f5e9f0412",
+   "name": "Team 6",
+   "players": [
+    "p005"
+   ]
+  },
+  {
+   "id": "m718812695a",
+   "name": "Team 7",
+   "players": [
+    "p113"
+   ]
+  },
+  {
+   "id": "mabc8d267cc",
+   "name": "Team 8",
+   "players": [
+    "p064"
+   ]
+  },
+  {
+   "id": "mfc1b1c3e30",
+   "name": "Team 9",
+   "players": [
+    "p111"
+   ]
+  },
+  {
+   "id": "m7e6ef06257",
+   "name": "Team 10",
+   "players": [
+    "p073"
+   ]
+  },
+  {
+   "id": "m2111d13e64",
+   "name": "Team 11",
+   "players": [
+    "p100"
+   ]
+  },
+  {
+   "id": "mfa86208529",
+   "name": "Team 12",
+   "players": [
+    "p046"
+   ]
+  },
+  {
+   "id": "m4ca40b2a83",
+   "name": "Team 13",
+   "players": [
+    "p062"
+   ]
+  },
+  {
+   "id": "m81ec28c1a6",
+   "name": "Team 14",
+   "players": [
+    "p072"
+   ]
+  },
+  {
+   "id": "ma4e78a16e1",
+   "name": "Team 15",
+   "players": [
+    "p125"
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "name": "A",
+   "teams": [
+    "m7bc2a5ac0f",
+    "m7e6ef06257",
+    "m2202b0c284",
+    "m2111d13e64"
+   ]
+  },
+  {
+   "name": "B",
+   "teams": [
+    "mfc1b1c3e30",
+    "m5f5e9f0412",
+    "m81ec28c1a6",
+    "ma4e78a16e1"
+   ]
+  },
+  {
+   "name": "C",
+   "teams": [
+    "mabc8d267cc",
+    "m4ca40b2a83",
+    "m718812695a",
+    "m024a74590f"
+   ]
+  },
+  {
+   "name": "D",
+   "teams": [
+    "mfa86208529",
+    "md7ba063d91",
+    "m06e4a9e973"
+   ]
+  }
+ ],
+ "matches": [
+  {
+   "id": "gA1_0",
+   "stage": "g",
+   "group": "A",
+   "round": 1,
+   "a": "m7bc2a5ac0f",
+   "b": "m2111d13e64",
+   "res": {
+    "w": "m7bc2a5ac0f",
+    "by": "Admin",
+    "at": "2026-11-15T14:20:18.625Z"
+   }
+  },
+  {
+   "id": "gA1_1",
+   "stage": "g",
+   "group": "A",
+   "round": 1,
+   "a": "m7e6ef06257",
+   "b": "m2202b0c284",
+   "f": 2
+  },
+  {
+   "id": "gB1_0",
+   "stage": "g",
+   "group": "B",
+   "round": 1,
+   "a": "mfc1b1c3e30",
+   "b": "ma4e78a16e1",
+   "f": 1
+  },
+  {
+   "id": "gB1_1",
+   "stage": "g",
+   "group": "B",
+   "round": 1,
+   "a": "m5f5e9f0412",
+   "b": "m81ec28c1a6"
+  },
+  {
+   "id": "gC1_0",
+   "stage": "g",
+   "group": "C",
+   "round": 1,
+   "a": "mabc8d267cc",
+   "b": "m024a74590f"
+  },
+  {
+   "id": "gC1_1",
+   "stage": "g",
+   "group": "C",
+   "round": 1,
+   "a": "m4ca40b2a83",
+   "b": "m718812695a"
+  },
+  {
+   "id": "gD1_0",
+   "stage": "g",
+   "group": "D",
+   "round": 1,
+   "a": "md7ba063d91",
+   "b": "m06e4a9e973"
+  },
+  {
+   "id": "gA2_0",
+   "stage": "g",
+   "group": "A",
+   "round": 2,
+   "a": "m2202b0c284",
+   "b": "m7bc2a5ac0f"
+  },
+  {
+   "id": "gA2_1",
+   "stage": "g",
+   "group": "A",
+   "round": 2,
+   "a": "m7e6ef06257",
+   "b": "m2111d13e64"
+  },
+  {
+   "id": "gB2_0",
+   "stage": "g",
+   "group": "B",
+   "round": 2,
+   "a": "m81ec28c1a6",
+   "b": "mfc1b1c3e30"
+  },
+  {
+   "id": "gB2_1",
+   "stage": "g",
+   "group": "B",
+   "round": 2,
+   "a": "m5f5e9f0412",
+   "b": "ma4e78a16e1"
+  },
+  {
+   "id": "gC2_0",
+   "stage": "g",
+   "group": "C",
+   "round": 2,
+   "a": "m718812695a",
+   "b": "mabc8d267cc"
+  },
+  {
+   "id": "gC2_1",
+   "stage": "g",
+   "group": "C",
+   "round": 2,
+   "a": "m4ca40b2a83",
+   "b": "m024a74590f"
+  },
+  {
+   "id": "gD2_0",
+   "stage": "g",
+   "group": "D",
+   "round": 2,
+   "a": "m06e4a9e973",
+   "b": "mfa86208529"
+  },
+  {
+   "id": "gA3_0",
+   "stage": "g",
+   "group": "A",
+   "round": 3,
+   "a": "m7bc2a5ac0f",
+   "b": "m7e6ef06257"
+  },
+  {
+   "id": "gA3_1",
+   "stage": "g",
+   "group": "A",
+   "round": 3,
+   "a": "m2202b0c284",
+   "b": "m2111d13e64"
+  },
+  {
+   "id": "gB3_0",
+   "stage": "g",
+   "group": "B",
+   "round": 3,
+   "a": "mfc1b1c3e30",
+   "b": "m5f5e9f0412"
+  },
+  {
+   "id": "gB3_1",
+   "stage": "g",
+   "group": "B",
+   "round": 3,
+   "a": "m81ec28c1a6",
+   "b": "ma4e78a16e1"
+  },
+  {
+   "id": "gC3_0",
+   "stage": "g",
+   "group": "C",
+   "round": 3,
+   "a": "mabc8d267cc",
+   "b": "m4ca40b2a83"
+  },
+  {
+   "id": "gC3_1",
+   "stage": "g",
+   "group": "C",
+   "round": 3,
+   "a": "m718812695a",
+   "b": "m024a74590f"
+  },
+  {
+   "id": "gD3_0",
+   "stage": "g",
+   "group": "D",
+   "round": 3,
+   "a": "mfa86208529",
+   "b": "md7ba063d91"
+  }
+ ],
+ "log": [
+  {
+   "at": "2026-11-15T14:17:12.444Z",
+   "by": "Admin",
+   "x": "Turnier angelegt"
+  },
+  {
+   "at": "2026-11-15T14:18:27.656Z",
+   "by": "Admin",
+   "x": "15 Zufallsteams hinzugefügt"
+  },
+  {
+   "at": "2026-11-15T14:18:45.221Z",
+   "by": "Admin",
+   "x": "Gruppen ausgelost"
+  },
+  {
+   "at": "2026-11-15T14:20:18.625Z",
+   "by": "Admin",
+   "x": "Ergebnis (Spielmodus): Team 4 vs Team 11 → Team 4"
+  }
+ ],
+ "hist": [
+  "{\"status\":\"setup\",\"groups\":[],\"matches\":[],\"teams\":[{\"id\":\"md7ba063d91\",\"name\":\"Team 1\",\"players\":[\"p115\"]},{\"id\":\"m2202b0c284\",\"name\":\"Team 2\",\"players\":[\"p037\"]},{\"id\":\"m06e4a9e973\",\"name\":\"Team 3\",\"players\":[\"p109\"]},{\"id\":\"m7bc2a5ac0f\",\"name\":\"Team 4\",\"players\":[\"p015\"]},{\"id\":\"m024a74590f\",\"name\":\"Team 5\",\"players\":[\"p021\"]},{\"id\":\"m5f5e9f0412\",\"name\":\"Team 6\",\"players\":[\"p005\"]},{\"id\":\"m718812695a\",\"name\":\"Team 7\",\"players\":[\"p113\"]},{\"id\":\"mabc8d267cc\",\"name\":\"Team 8\",\"players\":[\"p064\"]},{\"id\":\"mfc1b1c3e30\",\"name\":\"Team 9\",\"players\":[\"p111\"]},{\"id\":\"m7e6ef06257\",\"name\":\"Team 10\",\"players\":[\"p073\"]},{\"id\":\"m2111d13e64\",\"name\":\"Team 11\",\"players\":[\"p100\"]},{\"id\":\"mfa86208529\",\"name\":\"Team 12\",\"players\":[\"p046\"]},{\"id\":\"m4ca40b2a83\",\"name\":\"Team 13\",\"players\":[\"p062\"]},{\"id\":\"m81ec28c1a6\",\"name\":\"Team 14\",\"players\":[\"p072\"]},{\"id\":\"ma4e78a16e1\",\"name\":\"Team 15\",\"players\":[\"p125\"]}],\"msg\":\"Gruppen ausgelost\"}"
+ ],
+ "lots": {
+  "md7ba063d91": 0.902857134667258,
+  "m2202b0c284": 0.4397842076260483,
+  "m06e4a9e973": 0.8305378865173445,
+  "m7bc2a5ac0f": 0.6973105556935478,
+  "m024a74590f": 0.6271203550931355,
+  "m5f5e9f0412": 0.7737135447486931,
+  "m718812695a": 0.7877689121775083,
+  "mabc8d267cc": 0.40303565736656366,
+  "mfc1b1c3e30": 0.08913960168828794,
+  "m7e6ef06257": 0.8257915533779876,
+  "m2111d13e64": 0.4123721826769252,
+  "mfa86208529": 0.9600068800847437,
+  "m4ca40b2a83": 0.005889623070988725,
+  "m81ec28c1a6": 0.6281179071140401,
+  "ma4e78a16e1": 0.8849691195528924
+ }
+}
