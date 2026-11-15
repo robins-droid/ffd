@@ -1887,7 +1887,8 @@ function throwStats(pid, withLocal = true, k = S.tk) {
 const sdev = a => { if (a.length < 2) return null; const m = avg(a); return Math.sqrt(a.reduce((x, v) => x + (v - m) ** 2, 0) / (a.length - 1)); };
 const konsLbl = sd => sd == null ? '' : sd < 8 ? 'sehr konstant' : sd < 14 ? 'normal' : 'schwankend';
 function throwExtras(pid) {
-  const ch = chunks(S.pub, pid).filter(c => inYear(c.d)), s = ch.map(c => c.s).join('');
+  // Serien und „heiße Hand“ nur aus echt Wurf für Wurf erfassten Daten – importierte Altdaten kennen nur Prozente
+  const ch = chunks(S.pub, pid).filter(c => inYear(c.d) && c.by !== 'Import'), s = ch.map(c => c.s).join('');
   let best = 0, bestMiss = 0, run = 0, mrun = 0, cur = 0;
   for (const c of s) { if (c === '1') { run++; mrun = 0; best = Math.max(best, run); } else { mrun++; run = 0; bestMiss = Math.max(bestMiss, mrun); } }
   for (let i = s.length - 1; i >= 0 && s[i] === '1'; i--) cur++;
@@ -1895,7 +1896,8 @@ function throwExtras(pid) {
   for (const c of ch) for (let i = 1; i < c.s.length; i++) { if (c.s[i - 1] === '1') { aht++; if (c.s[i] === '1') ah++; } else { amt++; if (c.s[i] === '1') am++; } }
   const tN = throwStats(pid, false, 'n'), sd = tN.bp.length >= 3 ? sdev(tN.bp) : null;
   const gs = gamesIn().map(g => (g.s || {})[pid]).filter(x => x && x.n), gHit = gs.filter(x => x.h > 0).length;
-  return {n: s.length, best, bestMiss, cur, hot: aht >= 10 ? ah / aht * 100 : null, cold: amt >= 10 ? am / amt * 100 : null, aht, amt, sd, avgN: tN.avg, rel: sd != null ? tN.avg - sd / 2 : null, blocks: tN.bp.length, games: gs.length, gameRate: gs.length ? gHit / gs.length * 100 : null};
+  const all = chunks(S.pub, pid).filter(c => inYear(c.d)).reduce((a, c) => a + c.s.length, 0);
+  return {n: s.length, nAll: all, best, bestMiss, cur, hot: aht >= 10 ? ah / aht * 100 : null, cold: amt >= 10 ? am / amt * 100 : null, aht, amt, sd, avgN: tN.avg, rel: sd != null ? tN.avg - sd / 2 : null, blocks: tN.bp.length, games: gs.length, gameRate: gs.length ? gHit / gs.length * 100 : null};
 }
 function allYears() {
   const ys = new Set();
@@ -3557,25 +3559,26 @@ function notesCard(pid) {
     <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="noteTxt" maxlength="500" placeholder="Notiz hinzufügen …" style="flex:1"><button class="btn pri" id="noteAdd" style="margin:0;width:auto;padding:0 14px">＋</button></div></div>`;
 }
 function konsCard(pid) {
-  const e = throwExtras(pid); if (!e.n) return '';
+  const e = throwExtras(pid); if (!e.nAll) return '';
   return `<div class="card" id="pKons"><b>📊 Konstanz & Serien</b>
-    <div class="bigstat"><div><b>${e.sd != null ? '±' + num2(e.sd).replace(/,?0+$/, '') : '–'}</b><span>Schwankung${e.sd != null ? '<br>' + konsLbl(e.sd) : ''}</span></div><div><b>${e.rel != null ? fmtP(e.rel) : '–'}</b><span>Verlässlicher Wert</span></div><div><b>${e.best}</b><span>längste Trefferserie</span></div></div>
+    <div class="bigstat"><div><b>${e.sd != null ? '±' + num2(e.sd).replace(/,?0+$/, '') : '–'}</b><span>Schwankung${e.sd != null ? '<br>' + konsLbl(e.sd) : ''}</span></div><div><b>${e.rel != null ? fmtP(e.rel) : '–'}</b><span>Verlässlicher Wert</span></div><div><b>${e.n ? e.best : '–'}</b><span>längste Trefferserie</span></div></div>
     <div class="rel"><div class="grow"><span class="pn">🔥 Treffer nach Treffer</span><b>${e.hot != null ? fmtP(e.hot) : '–'}</b></div><div class="grow"><span class="pn">🧊 Treffer nach Fehlwurf</span><b>${e.cold != null ? fmtP(e.cold) : '–'}</b></div>
     <div class="grow"><span class="pn">🎯 Spiele mit mind. 1 Treffer</span><b>${e.gameRate != null ? fmtP(e.gameRate) + ' <small style="color:var(--muted)">(' + e.games + ')</small>' : '–'}</b></div>
-    <div class="grow"><span class="pn">Aktuelle Serie · meiste Fehlwürfe in Folge</span><b>${e.cur} · ${e.bestMiss}</b></div></div>
-    <p class="hint" style="margin:6px 0 0">Schwankung = wie weit die Statistiken typischerweise vom eigenen Schnitt abweichen (ab 3 Statistiken). Verlässlicher Wert = Ø minus halbe Schwankung. „Heiße Hand“ ab 10 Würfen.</p></div>`;
+    <div class="grow"><span class="pn">Aktuelle Serie · meiste Fehlwürfe in Folge</span><b>${e.n ? e.cur + ' · ' + e.bestMiss : '–'}</b></div></div>
+    <p class="hint" style="margin:6px 0 0">Schwankung = wie weit die Statistiken typischerweise vom eigenen Schnitt abweichen (ab 3 Statistiken). Verlässlicher Wert = Ø minus halbe Schwankung. Serien und „Heiße Hand“ nur aus Würfen, die Wurf für Wurf in der App erfasst wurden${e.n ? ` (${e.n} von ${e.nAll})` : ' – davon gibt es noch keine'}; die importierten Altdaten kennen nur Prozente. „Heiße Hand“ ab 10 Würfen.</p></div>`;
 }
 function konsSheet() {
-  const ids = Object.keys(S.pub.people).map(id => ({id, ...throwExtras(id)})).filter(x => x.n);
+  const ids = Object.keys(S.pub.people).map(id => ({id, ...throwExtras(id)})).filter(x => x.nAll);
   const lst = (rows, f) => rows.map((x, i) => `<button class="row click" data-pid="${x.id}"><span class="pl">${i + 1}</span><span class="nm">${esc(nameOf(x.id))}</span><span class="tm">${f(x)}</span></button>`).join('') || '<div class="empty">Noch zu wenige Daten</div>';
   const sd = ids.filter(x => x.sd != null && x.blocks >= 5).sort((a, b) => a.sd - b.sd).slice(0, 10);
   const rel = ids.filter(x => x.rel != null && x.blocks >= 3).sort((a, b) => b.rel - a.rel).slice(0, 10);
-  const st = ids.slice().sort((a, b) => b.best - a.best).slice(0, 10);
+  const st = ids.filter(x => x.n).sort((a, b) => b.best - a.best).slice(0, 10);
   const hot = ids.filter(x => x.hot != null && x.cold != null).sort((a, b) => (b.hot - b.cold) - (a.hot - a.cold)).slice(0, 10);
   const gr = ids.filter(x => x.games >= 3).sort((a, b) => b.gameRate - a.gameRate).slice(0, 10);
   openSheet(`<h2>📊 Konstanz & Serien</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')}</p>
     <h3 class="sect">Konstanteste Werfer <small style="font-weight:400">(ab 5 Statistiken)</small></h3><div class="list">${lst(sd, x => '±' + num2(x.sd))}</div>
     <h3 class="sect">Verlässlichster Wert <small style="font-weight:400">(Ø − ½ Schwankung)</small></h3><div class="list">${lst(rel, x => fmtP(x.rel))}</div>
+    <p class="hint">Serien und „Heiße Hand“ zählen nur Würfe, die Wurf für Wurf in der App erfasst wurden – nicht die importierten Altdaten.</p>
     <h3 class="sect">Längste Trefferserie</h3><div class="list">${lst(st, x => x.best + ' in Folge')}</div>
     <h3 class="sect">🔥 Heiße Hand <small style="font-weight:400">(nach Treffer vs. nach Fehlwurf)</small></h3><div class="list">${lst(hot, x => fmtP(x.hot) + ' / ' + fmtP(x.cold))}</div>
     <h3 class="sect">Spiele mit mind. 1 Treffer <small style="font-weight:400">(ab 3 Spielen)</small></h3><div class="list">${lst(gr, x => fmtP(x.gameRate))}</div>`);
