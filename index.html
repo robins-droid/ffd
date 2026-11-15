@@ -323,6 +323,9 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .wedit{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}.wedit button{position:relative;height:58px;border:0;border-radius:14px;font-size:24px;font-weight:900;color:#fff}
 .wedit button.h{background:#2e9e5b}.wedit button.m{background:var(--bad)}.wedit small{position:absolute;top:3px;left:6px;font-size:10px;font-weight:600;opacity:.8}
 #throwList .c.sdc{width:34px;color:var(--muted);font-size:12px}
+.game .ghd{display:flex;align-items:center;gap:8px;padding-right:44px}.game .ghd h2{flex:1;margin-bottom:0}
+.game .gcfg{font-size:20px;padding:6px 12px}.game .gcfg.on{border-color:var(--gold);background:rgba(245,197,24,.15)}
+.game .gsum{margin:2px 0 6px;font-weight:600}
 </style>
 </head>
 <body>
@@ -3833,6 +3836,7 @@ function startGame(players, teams, opts = {}) {
   if (teams) { GAME.teamsOn = true; GAME.teams = JSON.parse(JSON.stringify(teams)); }
   else if (GAME.teams) for (const k of ['a', 'b']) GAME.teams[k].players = GAME.teams[k].players.filter(p => players.includes(p));
   if (opts.tm) { GAME.tm = opts.tm; GAME.kind = 't'; GAME.tid = opts.tm.tid; GAME.tidDay = today(); }
+  GAME.hd = !opts.tm;
   saveGame(); gamePlay();
 }
 function newGameSheet() {
@@ -3924,6 +3928,9 @@ function gamePlay() {
         ${tb.map((n, i) => `<button class="mini bchip" data-a="fe" data-i="${i}" title="ändern">${i + 1}. Bier: ${n} ✎</button>`).join('')}
       </div></div>`;
   };
+  /* Reihenfolge: Team A, Team B, ohne Team – jeweils alphabetisch nach Vorname */
+  const order = () => { const r = p => !GAME.teamsOn ? 0 : ({a: 0, b: 1}[teamOf(p)] ?? 2);
+    return [...GAME.players].sort((x, y) => r(x) - r(y) || gameName(x).localeCompare(gameName(y), 'de', {sensitivity: 'base'})); };
   const total = () => GAME.players.reduce((a, p) => a + (S.local[p] || '').length, 0);
   const winOk = () => GAME.teamsOn ? (GAME.win === 'a' || GAME.win === 'b') : GAME.ext ? (GAME.extWin === 'w' || GAME.extWin === 'l') : false;
   const svTxt = () => (canDirect() ? '✅ Spiel speichern' : '✅ Spiel einreichen') + (total() ? ' (' + total() + ' Würfe' + (winOk() ? (GAME.ext ? (GAME.extWin === 'w' ? ', Sieg' : ', Niederlage') : ', Sieger') : '') + ')' : '');
@@ -3932,7 +3939,11 @@ function gamePlay() {
     if (GAME.teamsOn) gameTeams();
     const T = GAME.teams, old = GAME.teamsOn && window.TOUR && TOUR.oldTeams ? TOUR.oldTeams().filter(o => o.players.every(p => GAME.players.includes(p))) : [];
     const tmInfo = GAME.tm && window.TOUR ? TOUR.matchLabel(GAME.tm) : '';
-    openSheet(`<div class="game"><h2>Spiel läuft</h2><p class="sub">✓ = Treffer, ✗ = daneben. Alles bleibt auf dem Handy, bis du das Spiel unten speicherst.</p>
+    const hdOn = GAME.hd !== false;
+    const summ = tmInfo ? '🏆 ' + tmInfo : (GAME.kind === 't' ? '🏆 Turnier' : '🎯 Training') + ' · ' + (GAME.teamsOn ? T.a.name + ' vs ' + T.b.name : GAME.ext ? '🆚 ' + (GAME.extName || 'Gegen andere') : 'Ohne Teams');
+    openSheet(`<div class="game"><div class="ghd"><h2>Spiel läuft</h2><button class="chip gcfg ${hdOn ? 'on' : ''}" id="gCfg" title="Einstellungen">⚙️</button></div>
+      ${hdOn ? '' : `<p class="sub gsum">${esc(summ)}</p>`}
+      <div class="ghead ${hdOn ? '' : 'hidden'}"><p class="sub">✓ = Treffer, ✗ = daneben. Alles bleibt auf dem Handy, bis du das Spiel unten speicherst.</p>
       ${tmInfo ? `<div class="rec" style="margin-bottom:8px">🏆 ${esc(tmInfo)}<br><small style="color:var(--muted)">Der Sieger wird beim Speichern auch im Turnier eingetragen.</small></div>` : ''}
       ${tourOn() && !GAME.tm ? `<div class="seg" id="gk" style="margin-bottom:6px"><button data-v="n" class="${GAME.kind === 'n' ? 'on' : ''}">🎯 Training</button><button data-v="t" class="${GAME.kind === 't' ? 'on' : ''}">🏆 Turnier</button></div>` : ''}
       ${tourOn() && GAME.kind === 't' && !GAME.tm ? `<div class="field" style="margin-bottom:6px"><label>Turnier</label><select class="inp" id="gTid"><option value="">– keinem Turnier zuordnen –</option>${tourChoices().map(x => `<option value="${x.id}" ${gameTid() === x.id ? 'selected' : ''}>${esc(x.name)} · ${fmtD(x.d)}</option>`).join('')}</select></div>` : ''}
@@ -3943,7 +3954,8 @@ function gamePlay() {
         ${GAME.tm ? '' : `<div class="ctl" style="margin:0 0 6px"><label>🎲 Teams auslosen</label><div class="seg" id="tgRand"><button data-v="rand">Zufall</button><button data-v="gw">Wertung</button><button data-v="elo">Elo</button></div></div>`}
         <p class="hint" style="margin:0 0 4px">„Wertung“ und „Elo“ verteilen die Stärksten gleichmäßig. Danach links bei jedem Spieler auf A/B tippen, um zu tauschen.</p>` : ''}
       <p class="hint" style="margin:2px 0 4px">🍺 fertig = Bier leer: übernimmt die Treffer des Teams seit Beginn dieses Biers (antippen zum Ändern).</p>
-      <div id="rows">${GAME.players.map(row).join('')}</div>
+      <button class="btn pri" id="gHdOk" style="margin:4px 0 10px">✓ Fertig – zur Erfassung</button></div>
+      <div id="rows">${order().map(row).join('')}</div>
       <div id="tgWrap">${winHtml()}</div>
       <button class="btn ghost" id="edit">Spieler ändern</button>
       ${canDirect() ? '' : '<div class="field" style="margin-top:10px"><label>Dein Name *</label><input class="inp" id="by" placeholder="Pflicht zum Einreichen"></div>'}
@@ -3961,14 +3973,18 @@ function gamePlay() {
       <div class="two" id="tgW" style="margin-top:6px">${['a', 'b'].map(k => `<button class="wbtn ${GAME.win === k ? 'on' : ''}" data-w="${k}"><b>${esc(T[k].name)}</b><small>${esc(T[k].players.map(gameName).join(', ') || 'noch keine Spieler')}</small></button>`).join('')}</div>`;
   };
   /* Nur einzelne Teile neu zeichnen – die Ansicht springt nicht */
-  const refresh = (ps = GAME.players) => {
-    for (const p of ps) { const el = $('#rows').querySelector(`[data-p="${CSS.escape(p)}"]`); if (el) el.outerHTML = row(p); }
+  const refresh = ps => {
+    if (!ps) $('#rows').innerHTML = order().map(row).join('');
+    else for (const p of ps) { const el = $('#rows').querySelector(`[data-p="${CSS.escape(p)}"]`); if (el) el.outerHTML = row(p); }
     $('#tgWrap').innerHTML = winHtml(); $('#sv').textContent = svTxt();
   };
   const names = () => { if (!$('#tgA')) return; const T = GAME.teams; T.a.name = $('#tgA').value.trim().slice(0, 40) || 'Team A'; T.b.name = $('#tgB').value.trim().slice(0, 40) || 'Team B'; saveGame(); };
   const wire = () => {
+    const setHd = v => { GAME.hd = v; saveGame(); draw(); if (!v) $('#sheet').scrollTop = 0; };
+    $('#gCfg').onclick = () => setHd(GAME.hd === false);
+    $('#gHdOk').onclick = () => { names(); setHd(false); };
     if ($('#tgRand')) $('#tgRand').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; names(); splitTeams(b.dataset.v); saveGame(); refresh(); toast('Teams ausgelost ✓'); };
-    if ($('#gMode')) $('#gMode').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; GAME.teamsOn = b.dataset.v === 'teams'; GAME.ext = b.dataset.v === 'ext'; GAME.win = ''; GAME.extWin = ''; saveGame(); const y = $('#sheetBody').scrollTop; draw(); $('#sheetBody').scrollTop = y; };
+    if ($('#gMode')) $('#gMode').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; GAME.teamsOn = b.dataset.v === 'teams'; GAME.ext = b.dataset.v === 'ext'; GAME.win = ''; GAME.extWin = ''; saveGame(); const y = $('#sheet').scrollTop; draw(); $('#sheet').scrollTop = y; };
     if ($('#extN')) $('#extN').oninput = e => { GAME.extName = e.target.value.trim().slice(0, 40); saveGame(); };
     if ($('#tgA')) $('#tgA').oninput = $('#tgB').oninput = () => { names(); $('#sheetBody').querySelectorAll('#tgW [data-w]').forEach(b => { b.querySelector('b').textContent = GAME.teams[b.dataset.w].name; }); };
     if ($('#tgOld')) $('#tgOld').onchange = e => { const o = TOUR.oldTeams().filter(x => x.players.every(p => GAME.players.includes(p)))[+e.target.value]; if (!o) return; names(); const T = GAME.teams, k = T.a.players.length && !T.b.players.length ? 'b' : 'a', ot = k === 'a' ? 'b' : 'a';
@@ -3994,7 +4010,9 @@ function gamePlay() {
       }
       if (a === 'u') S.local[p] = (S.local[p] || '').slice(0, -1); else { S.local[p] = (S.local[p] || '') + a; if (navigator.vibrate) navigator.vibrate(a === '1' ? 25 : [15, 40, 15]); }
       if (!S.local[p]) delete S.local[p];
-      GAME.active = true; saveLocal(); saveGame();
+      GAME.active = true; saveLocal();
+      if (GAME.hd !== false && a !== 'u') { names(); GAME.hd = false; saveGame(); const y = $('#sheet').scrollTop, top = b.closest('[data-p]').getBoundingClientRect().top; draw(); render(); const el = $('#rows').querySelector(`[data-p="${CSS.escape(p)}"]`); if (el) $('#sheet').scrollTop += el.getBoundingClientRect().top - top; return; }
+      saveGame();
       refresh(GAME.teamsOn ? GAME.players.filter(q => teamOf(q) === teamOf(p)) : GAME.players);
       render();
     };
@@ -4005,7 +4023,7 @@ function gamePlay() {
       GAME.active = false; resetGameStats(); saveLocal(); saveGame(); closeSheet(true); render(); toast('Spiel verworfen');
     };
     if ($('#gTid')) $('#gTid').onchange = e => { GAME.tid = e.target.value; GAME.tidDay = today(); saveGame(); };
-    if ($('#gk')) $('#gk').onclick = e => { const b = e.target.closest('[data-v]'); if (!b || b.dataset.v === GAME.kind) return; GAME.kind = b.dataset.v; saveGame(); const y = $('#sheetBody').scrollTop; draw(); $('#sheetBody').scrollTop = y; };
+    if ($('#gk')) $('#gk').onclick = e => { const b = e.target.closest('[data-v]'); if (!b || b.dataset.v === GAME.kind) return; GAME.kind = b.dataset.v; saveGame(); const y = $('#sheet').scrollTop; draw(); $('#sheet').scrollTop = y; };
     $('#sv').onclick = () => guarded(async () => {
       names();
       const T = GAME.teamsOn ? gameTeams() : null;
