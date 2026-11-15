@@ -322,6 +322,7 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .blk.click{cursor:pointer}.blk.click:active{background:rgba(255,255,255,.04)}
 .wedit{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}.wedit button{position:relative;height:58px;border:0;border-radius:14px;font-size:24px;font-weight:900;color:#fff}
 .wedit button.h{background:#2e9e5b}.wedit button.m{background:var(--bad)}.wedit small{position:absolute;top:3px;left:6px;font-size:10px;font-weight:600;opacity:.8}
+#throwList .c.sdc{width:34px;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -377,12 +378,13 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 
   <section id="vThrows" class="hidden">
     <div class="seg" id="tkSeg" style="margin-top:12px"><button data-v="n">🎯 Training</button><button data-v="t">🏆 Turnier</button></div>
+    <div class="ctl" style="margin-top:8px"><label>Rangliste</label><div class="seg" id="tmSeg" style="flex:1"><button data-v="norm">Normal</button><button data-v="rel">Verlässliche Werfer</button></div><button class="chip" id="relInfo" title="Wie wird das berechnet?">ⓘ</button></div>
     <div class="card statinfo" style="margin-top:12px">
       <div><b id="statSizeLbl"></b><br><span>Gesamtquote = alle Würfe zusammen</span></div>
       <button class="chip" id="statSizeBtn">Ändern</button>
     </div>
     <div class="kpis" id="throwKpis"></div><p class="kpihint" id="throwHint">📈 Kennzahlen antippen für die Entwicklung</p>
-    <button class="btn ghost" id="konsBtn" style="margin:4px 0 8px">📊 Konstanz, Serien & Heiße Hand</button>
+    <button class="btn ghost" id="konsBtn" style="margin:4px 0 8px">🔥 Serien & Heiße Hand</button>
     <div class="list" id="throwList"></div>
   </section>
 
@@ -2380,7 +2382,11 @@ function renderThrows() {
   [...$('#tkSeg').children].forEach(b => b.classList.toggle('on', b.dataset.v === S.tk));
   $('#statSizeLbl').textContent = (S.tk === 't' ? 'Turnier · ' : '') + '1 Statistik = ' + N + ' Würfe';
   const ids = Object.keys(S.pub.people).filter(id => yearChunks(id).length || (S.local[id] || '').length);
-  const st = ids.map(id => ({id, ...throwStats(id)})).filter(x => x.total).sort((a, b) => ((b.blocks.length > 0) - (a.blocks.length > 0)) || (b.pct - a.pct) || (b.total - a.total));
+  const relM = S.tm === 'rel';
+  [...$('#tmSeg').children].forEach(b => b.classList.toggle('on', b.dataset.v === (relM ? 'rel' : 'norm')));
+  const st = ids.map(id => { const x = throwStats(id), sd = x.bp.length >= 3 ? sdev(x.bp) : null; return {id, ...x, sd, rel: sd != null ? x.avg - sd / 2 : null}; }).filter(x => x.total)
+    .sort(relM ? (a, b) => ((b.rel != null) - (a.rel != null)) || (b.rel - a.rel) || (b.total - a.total)
+      : (a, b) => ((b.blocks.length > 0) - (a.blocks.length > 0)) || (b.pct - a.pct) || (b.total - a.total));
   const tot = st.reduce((a, x) => a + x.total, 0), hits = st.reduce((a, x) => a + x.hits, 0);
   const allBlocks = st.flatMap(x => x.bp);
   $('#throwHint').classList.toggle('hidden', !st.length);
@@ -2388,10 +2394,11 @@ function renderThrows() {
   $('#throwKpis').classList.add('click'); $('#throwKpis').onclick = () => st.length && throwDevSheet();
   $('#throwKpis').innerHTML = st.length ? `<div><b>${st.length}</b><span>Spieler</span></div><div class="hl"><b>${tot}</b><span>Würfe gesamt</span></div>
     <div><b>${fmtP(tot ? hits / tot * 100 : null)}</b><span>Ø Quote</span></div><div><b>${fmtP(avg(allBlocks))}</b><span>Ø je Statistik</span></div>` : '';
-  $('#throwList').innerHTML = st.length ? `<div class="thead"><span class="nm">Name</span><span class="c">Gesamt</span><span class="c">Ø Stat.</span><span class="c">Würfe</span></div>` +
-    st.map((x, i) => `<button class="row click" data-pid="${x.id}"><span class="pl">${i + 1}</span>
-      <span class="nm">${esc(nameOf(x.id))}<div class="bar"><i style="width:${x.pct || 0}%"></i></div></span>
-      <span class="c big">${fmtP(x.pct)}</span><span class="c">${fmtP(x.avg)}</span><span class="c"><b class="tot">${x.total}</b></span></button>`).join('')
+  const sdTxt = x => x.sd != null ? '±' + Math.round(x.sd) : '–';
+  $('#throwList').innerHTML = st.length ? `<div class="thead"><span class="nm">Name</span><span class="c">${relM ? 'Verl.' : 'Gesamt'}</span><span class="c">Ø Stat.</span>${relM ? '' : '<span class="c sdc">±</span>'}<span class="c">Würfe</span></div>` +
+    st.map((x, i) => `<button class="row click" data-pid="${x.id}"><span class="pl">${relM && x.rel == null ? '' : i + 1}</span>
+      <span class="nm">${esc(nameOf(x.id))}<div class="bar"><i style="width:${(relM ? x.rel : x.pct) || 0}%"></i></div>${relM && x.rel == null ? '<small>unter 3 Statistiken</small>' : ''}</span>
+      <span class="c big">${fmtP(relM ? x.rel : x.pct)}</span><span class="c">${fmtP(x.avg)}</span>${relM ? '' : `<span class="c sdc">${sdTxt(x)}</span>`}<span class="c"><b class="tot">${x.total}</b></span></button>`).join('')
     : `<div class="empty">${S.year !== 'all' ? 'Keine Würfe ' + yLbl() : 'Noch keine Würfe eingetragen.'}</div>`;
 }
 
@@ -2405,6 +2412,13 @@ $('#hq').oninput = () => {
 };
 $('#hqRes').onclick = e => { const b = e.target.closest('[data-pid]'); if (b) { profileSheet(b.dataset.pid); $('#hq').value = ''; $('#hqRes').classList.add('hidden'); } };
 $('#konsBtn').onclick = () => konsSheet();
+$('#tmSeg').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { S.tm = b.dataset.v; renderThrows(); } };
+$('#relInfo').onclick = () => openSheet(`<h2>ⓘ Wie wird gerechnet?</h2>
+  <div class="card"><b>Ø Stat.</b><p class="hint" style="margin:4px 0 0">Durchschnitt aller vollen Statistiken (je ${S.pub.settings.statSize} Würfe).</p></div>
+  <div class="card"><b>± (Standardabweichung)</b><p class="hint" style="margin:4px 0 0">Wie weit die einzelnen Statistiken typischerweise vom eigenen Durchschnitt abweichen. Kleine Zahl = konstant, große Zahl = schwankend. Ab 3 Statistiken.</p></div>
+  <div class="card"><b>Verlässlicher Wert</b><p class="hint" style="margin:4px 0 0">= Ø Stat. − ½ × Standardabweichung</p>
+    <p class="hint" style="margin:6px 0 0">Beispiel: Ø 40 % ±6 → <b>37 %</b> · Ø 42 % ±20 → <b>32 %</b>.<br>Wer konstant trifft, liegt vorne – auch wenn der Durchschnitt etwas niedriger ist. Wer zwischen sehr gut und sehr schlecht schwankt, rutscht nach hinten.</p></div>
+  <div class="card"><b>Rangliste „Normal“</b><p class="hint" style="margin:4px 0 0">Sortiert nach der Gesamtquote (alle Würfe zusammen).</p></div>`);
 $('#tabHome').onclick = () => { S.view = 'home'; render(); scrollTo(0, 0); };
 $('#homeRules').onclick = () => rulesSheet();
 $('#tabTour').onclick = () => { S.view = 'tour'; render(); scrollTo(0, 0); };
@@ -3614,9 +3628,7 @@ function konsSheet() {
   const st = ids.filter(x => x.n).sort((a, b) => b.best - a.best).slice(0, 10);
   const hot = ids.filter(x => x.hot != null && x.cold != null).sort((a, b) => (b.hot - b.cold) - (a.hot - a.cold)).slice(0, 10);
   const gr = ids.filter(x => x.games >= 3).sort((a, b) => b.gameRate - a.gameRate).slice(0, 10);
-  openSheet(`<h2>📊 Konstanz & Serien</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')}</p>
-    <h3 class="sect">Konstanteste Werfer <small style="font-weight:400">(ab 5 Statistiken)</small></h3><div class="list">${lst(sd, x => '±' + num2(x.sd))}</div>
-    <h3 class="sect">Verlässlichster Wert <small style="font-weight:400">(Ø − ½ Schwankung)</small></h3><div class="list">${lst(rel, x => fmtP(x.rel))}</div>
+  openSheet(`<h2>🔥 Serien & Heiße Hand</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')}</p>
     <p class="hint">Serien und „Heiße Hand“ zählen nur Würfe, die Wurf für Wurf in der App erfasst wurden – nicht die importierten Altdaten.</p>
     <h3 class="sect">Längste Trefferserie</h3><div class="list">${lst(st, x => x.best + ' in Folge')}</div>
     <h3 class="sect">🔥 Heiße Hand <small style="font-weight:400">(nach Treffer vs. nach Fehlwurf)</small></h3><div class="list">${lst(hot, x => fmtP(x.hot) + ' / ' + fmtP(x.cold))}</div>
