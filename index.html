@@ -2567,7 +2567,7 @@ function setupSheet() {
 function editorsSheet() {
   const eds = Object.entries(S.secret.editors || {});
   openSheet(`<h2>Freigeber</h2><p class="sub">Was jeder Freigeber darf, legst du pro Person fest. Jeder bekommt ein eigenes Passwort – so siehst du, wer was freigegeben oder eingetragen hat.</p>
-    <div class="list">${eds.length ? eds.map(([id, e]) => `<button class="row click" data-id="${id}"><span class="nm">${esc(e.name)}<small>${Array.isArray(e.perm) ? e.perm.length + ' von ' + PERMS.length + ' Rechten' : 'alle Rechte'}</small></span><span>✎</span></button>`).join('') : '<div class="empty">Noch keine Freigeber</div>'}</div>
+    <div class="list">${eds.length ? eds.map(([id, e]) => `<button class="row click" data-id="${id}"><span class="nm">${esc(e.name)}<small>${Array.isArray(e.perm) ? e.perm.filter(x => !x.startsWith('v')).length + ' von ' + PERMS.length + ' Rechten' : 'alle Rechte'}</small></span><span>✎</span></button>`).join('') : '<div class="empty">Noch keine Freigeber</div>'}</div>
     <button class="btn pri" id="add">＋ Freigeber hinzufügen</button>
     <button class="btn" id="apw">Mein Admin-Passwort ändern</button>`);
   $('#add').onclick = () => editorSheet();
@@ -2582,12 +2582,16 @@ function editorSheet(eid) {
     <p class="hint">Tipp: z. B. drei Wörter mit Bindestrich, etwa „bier-ball-tor“.</p>
     <h3 class="sect">Darf …</h3>
     ${PERMS.map(([k, n]) => `<label class="check"><input type="checkbox" data-perm="${k}" ${!e || !Array.isArray(e.perm) || e.perm.includes(k) ? 'checked' : ''}> ${n}</label>`).join('')}
+    <h3 class="sect">Darf im Profil sehen …</h3>
+    <p class="hint" style="margin-top:-4px">Gilt für Bereiche, die unter „👤 Profil-Ansicht“ auf „Freigeber“ stehen. Bereiche für „Alle“ sieht sowieso jeder, „Admin“ nur du.</p>
+    ${PSECS.map(([k, n]) => { const vs = e && Array.isArray(e.perm) && e.perm.includes('v-set'); return `<label class="check"><input type="checkbox" data-vis="${k}" ${!vs || e.perm.includes('v:' + k) ? 'checked' : ''}> ${n}${secLvl(k) !== 'editors' ? ' <small style="color:var(--muted)">(steht auf „' + (secLvl(k) === 'all' ? 'Alle' : 'Admin') + '“)</small>' : ''}</label>`; }).join('')}
     <p class="hint">Ohne „Direkt eintragen“ landen seine Einträge wie bei Gästen erst bei den Vorschlägen. Löschen, Personen zusammenführen und Regelwerke bearbeiten bleiben immer beim Admin.</p>
     <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button>
     ${e ? '<button class="btn danger" id="del">Zugang entfernen</button>' : ''}`);
   $('#go').onclick = () => guarded(async () => {
     const nm = $('#nm').value.trim(), pw = $('#pw').value;
-    const perm = [...$('#sheetBody').querySelectorAll('[data-perm]')].filter(x => x.checked).map(x => x.dataset.perm);
+    const perm = [...$('#sheetBody').querySelectorAll('[data-perm]')].filter(x => x.checked).map(x => x.dataset.perm)
+      .concat('v-set', [...$('#sheetBody').querySelectorAll('[data-vis]')].filter(x => x.checked).map(x => 'v:' + x.dataset.vis));
     if (!nm) throw new Error('Bitte Namen eingeben.');
     if ((!e || pw) && pw.length < 10) throw new Error('Passwort bitte mindestens 10 Zeichen.');
     await save(e ? 'Freigeber geändert' : 'Freigeber hinzugefügt', async ctx => {
@@ -3329,7 +3333,7 @@ function beerImportSheet(imp) {
 /* Admin: Was darf wer im Profil sehen? */
 function beerVisSheet() {
   const cur = Object.fromEntries(PSECS.map(([k]) => [k, secLvl(k)]));
-  openSheet(`<h2>👤 Profil-Ansicht</h2><p class="sub">Pro Bereich festlegen, wer ihn im Profil sehen darf. „Biere getrunken“ gilt auch für „Meiste Biere“, den Vergleich und die Excel-Datei. Die Vereins-Gesamtzahl der Biere sieht immer jeder.</p>
+  openSheet(`<h2>👤 Profil-Ansicht</h2><p class="sub">Pro Bereich festlegen, wer ihn im Profil sehen darf. Bei „Freigeber“ wählst du unter „Freigeber & Passwörter“ für jede Person einzeln, welche dieser Bereiche sie sieht. „Biere getrunken“ gilt auch für „Meiste Biere“, den Vergleich und die Excel-Datei. Die Vereins-Gesamtzahl der Biere sieht immer jeder.</p>
     ${PSECS.map(([k, n]) => `<div class="pvis"><span>${n}</span><div class="seg" data-k="${k}">${[['all', 'Alle'], ['editors', 'Freigeber'], ['admin', 'Admin']].map(([v, l]) => `<button data-v="${v}" class="${cur[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('')}
     <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button>`);
   $('#sheetBody').querySelectorAll('.pvis .seg').forEach(sg => sg.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; cur[sg.dataset.k] = b.dataset.v; [...sg.children].forEach(x => x.classList.toggle('on', x === b)); });
@@ -3426,7 +3430,9 @@ function gamesIn() { return (S.pub.games || []).filter(g => inYear(g.d)); }
 const PSECS = [['cmp', '⚖️ Vergleichen-Knopf'], ['games', '🍻 Spiele, Siege, Siegesrate'], ['beers', '🍺 Biere getrunken'], ['tsz', '🎯 Wurfquote nach Teamgröße'], ['rel', '👥 Mitspieler & Gegner'],
   ['glist', '🎯 Letzte Spiele'], ['tour', '🏆 Turniere & Elo'], ['ex', '⏱️ Ex-Zeiten'], ['thr', '🎯 Wurfstatistik'], ['thrT', '🏆 Turnier-Würfe'], ['kons', '📊 Konstanz, Serien, Heiße Hand, Spielquote']];
 const secLvl = k => { const st = S.pub.settings || {}; return (st.vis || {})[k] || (k === 'beers' ? st.beerVis : null) || 'all'; };
-const seeSec = k => { const v = secLvl(k); return v === 'all' || (v === 'editors' && !!S.role) || isAdmin(); };
+/* „Freigeber“-Bereiche: pro Freigeber einzeln freischaltbar (Häkchen „v:<bereich>“; ohne Auswahl bisher = alle) */
+const edSees = k => S.role === 'editor' && (!Array.isArray(S.perm) || !S.perm.includes('v-set') || S.perm.includes('v:' + k));
+const seeSec = k => { const v = secLvl(k); return v === 'all' || isAdmin() || (v === 'editors' && edSees(k)); };
 const canSeeBeers = () => seeSec('beers');
 function listBeers(pid) {
   const B = S.pub.beerLists; if (!B || S.year !== 'all') return 0;
