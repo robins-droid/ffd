@@ -316,6 +316,9 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .rulefull .rfh{display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;border-bottom:1px solid var(--line);background:var(--bg2)}
 .rulefull .rfh b{flex:1;font-size:18px;text-align:center}.rulefull .rfx{border:0;background:var(--card2);color:var(--text);border-radius:10px;padding:8px 12px;font-weight:700}
 .rulefull .rfb{flex:1;overflow-y:auto;padding:18px 18px calc(30px + env(safe-area-inset-bottom));font-size:17px;line-height:1.6;max-width:760px;width:100%;margin:0 auto;box-sizing:border-box;-webkit-overflow-scrolling:touch}
+.tsz{display:grid;grid-template-columns:72px 1fr 54px;gap:8px;align-items:center;padding:5px 0;font-size:13px}.tsz small{grid-column:2/4;color:var(--muted);margin-top:-4px;font-size:11px}.tsz b{text-align:right;color:var(--gold2)}
+.chart .band{fill:var(--gold);opacity:.10}.legend .lb{display:inline-block;width:14px;height:8px;background:var(--gold);opacity:.25;border-radius:2px;margin-right:4px;vertical-align:middle}
+.pvis{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.pvis>span{font-size:14px;font-weight:600}.pvis .seg button{font-size:13px;padding:7px 4px}
 </style>
 </head>
 <body>
@@ -334,6 +337,8 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 
   <section id="vHome">
     <div class="hero" style="padding:14px 0 4px"><img src="icons/logo-400.png" alt="" style="width:120px"></div>
+    <div class="search" id="homeSearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="hq" placeholder="Spieler suchen …" autocomplete="off"></div>
+    <div class="list hidden" id="hqRes" style="margin-bottom:10px"></div>
     <h3 class="sect">Übersicht <small id="homeYear"></small></h3>
     <div id="homeCats"></div>
     <div id="homeGames"></div>
@@ -348,7 +353,7 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
     <div id="sumBox">
     <h3 class="sect">Gesamtwertung</h3>
     <p class="hint" style="margin:-4px 2px 10px">Summe = Ex-Prozente (schnellste Zeit = 100 %) + Wurf-Wert (Statistik-Prozente × 2)</p>
-    <div class="ctl"><label>Wurf-Wert</label><div class="seg" id="gwMode"><button data-v="avg">Ø × 2</button><button data-v="max">Max × 2</button></div></div>
+    <div class="ctl"><label>Wurf-Wert</label><div class="seg" id="gwMode"><button data-v="avg">Ø × 2</button><button data-v="max">Max × 2</button><button data-v="rel">Verlässlich × 2</button></div></div>
     <div class="ctl"><label>Zeitraum</label><div class="seg" id="gwPer"><button data-v="all">Gesamt</button><button data-v="year">Jahr</button><button data-v="tour">Ab Turnier / Datum</button></div></div>
     <div class="ctl hidden" id="gwYearC"><label>Jahr</label><select class="inp" id="gwYear" style="flex:1"></select></div>
     <div class="ctl hidden" id="gwSince"><label>Ab</label><select class="inp" id="gwFrom" style="flex:1"></select><input class="inp hidden" id="gwDate" type="date" style="flex:1"></div>
@@ -374,6 +379,7 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
       <button class="chip" id="statSizeBtn">Ändern</button>
     </div>
     <div class="kpis" id="throwKpis"></div><p class="kpihint" id="throwHint">📈 Kennzahlen antippen für die Entwicklung</p>
+    <button class="btn ghost" id="konsBtn" style="margin:4px 0 8px">📊 Konstanz, Serien & Heiße Hand</button>
     <div class="list" id="throwList"></div>
   </section>
 
@@ -1410,7 +1416,7 @@ const isAdmin = () => S.role === 'admin';
 /* Rechte der Freigeber (vom Admin pro Person wählbar; ohne Auswahl = alles) */
 const PERMS = [['approve', '📥 Vorschläge freigeben'], ['direct', '✍️ Direkt eintragen (Zeiten, Würfe, Kommentare, Spiele)'], ['names', '👁 Volle Namen sehen'],
   ['people', '👥 Personen & Spitznamen bearbeiten'], ['cats', '🍺 Kategorien verwalten'], ['stat', '📏 Statistik-Länge ändern'],
-  ['tdates', '📅 Turnierdaten für die Gesamtwertung'], ['tour', '🏆 Turniere erstellen & leiten'], ['csv', '⬇️ CSV herunterladen'], ['share', '📤 Turniere als Bild/CSV teilen'], ['delete', '🗑 Einträge bearbeiten & löschen (Ex-Zeiten, Würfe, Kommentare, Spiele)']];
+  ['tdates', '📅 Turnierdaten für die Gesamtwertung'], ['tour', '🏆 Turniere erstellen & leiten'], ['csv', '⬇️ CSV herunterladen'], ['share', '📤 Turniere als Bild/CSV teilen'], ['delete', '🗑 Einträge bearbeiten & löschen (Ex-Zeiten, Würfe, Kommentare, Spiele)'], ['notes', '🔒 Interne Notizen zu Personen sehen & schreiben']];
 const can = k => S.role === 'admin' || (S.role === 'editor' && (!Array.isArray(S.perm) || S.perm.includes(k)));
 const canDirect = () => can('direct');
 const median = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
@@ -1733,7 +1739,12 @@ async function setEditor(eid, raw) {
 }
 /* Namens-Schlüssel: Admin über KA, Freigeber über ihren eigenen Schlüssel */
 async function loadNameKey() {
-  const f = S.secret; S.KN = S.KNraw = null; S.names = null;
+  const f = S.secret; S.KN = S.KNraw = null; S.names = null; S.KT = S.KTraw = null; S.notes = null;
+  try {   // Schlüssel für interne Personen-Notizen
+    if (isAdmin() && f.ktA) S.KTraw = await aesDec(S.KA, f.ktA);
+    else if (S.role === 'editor' && f.editors[S.me.id] && f.editors[S.me.id].kt) S.KTraw = await aesDec(S.Ki, f.editors[S.me.id].kt);
+    if (S.KTraw) { S.KT = await importK(S.KTraw); S.notes = f.notes ? await decJ(S.KT, f.notes) : {}; }
+  } catch { S.KT = null; S.notes = null; }
   if (isAdmin()) {
     if (f.kn) { S.KNraw = await aesDec(S.KA, f.kn); S.KN = await importK(S.KNraw); }
     S.names = (await decJ(S.KN || S.KA, f.names)).people;
@@ -1744,6 +1755,26 @@ async function loadNameKey() {
       if (f.privN) S.priv = await crypto.subtle.importKey('pkcs8', await aesDec(S.KN, f.privN), {name: 'RSA-OAEP', hash: 'SHA-256'}, false, ['decrypt']);
     }
   }
+}
+/* Schlüssel für interne Notizen (nur Admin legt ihn an) */
+async function ensureNotesKey(ctx) {
+  if (S.KTraw) { if (!ctx.secFile.ktA) ctx.secFile.ktA = await aesEnc(S.KA, S.KTraw); return S.KTraw; }
+  let raw;
+  if (ctx.secFile.ktA) raw = await aesDec(S.KA, ctx.secFile.ktA);
+  else { raw = newRaw(); ctx.secFile.ktA = await aesEnc(S.KA, raw); ctx.secFile.notes = await encJ(await importK(raw), {}); }
+  S.KTraw = raw; S.KT = await importK(raw); S.notes = ctx.secFile.notes ? await decJ(S.KT, ctx.secFile.notes) : {};
+  return raw;
+}
+async function saveNotes(msg, fn) {
+  let out;
+  await save(msg, async ctx => {
+    if (isAdmin()) await ensureNotesKey(ctx);
+    if (!S.KT) throw new Error('Keine Berechtigung für interne Notizen.');
+    const notes = ctx.secFile.notes ? await decJ(S.KT, ctx.secFile.notes) : {};
+    fn(notes); out = notes;
+    ctx.newSecret = {...ctx.secFile, notes: await encJ(S.KT, notes)};
+    ctx.after = async () => { S.notes = out; };
+  }, {okText: 'Notiz gespeichert ✓'});
 }
 /* Einmalig: eigenen Namens-Schlüssel anlegen und allen Freigebern geben */
 async function migrateNameKey() {
@@ -1852,6 +1883,20 @@ function throwStats(pid, withLocal = true, k = S.tk) {
   return {s, total: s.length, hits, pct: s.length ? hits / s.length * 100 : null, blocks, bp, avg: avg(bp),
     best: bp.length ? Math.max(...bp) : null, cur, curHits: [...cur].filter(c => c === '1').length, N};
 }
+/* Konstanz, Serien, „heiße Hand“ – aus der Wurfreihe (Training + Turnier) */
+const sdev = a => { if (a.length < 2) return null; const m = avg(a); return Math.sqrt(a.reduce((x, v) => x + (v - m) ** 2, 0) / (a.length - 1)); };
+const konsLbl = sd => sd == null ? '' : sd < 8 ? 'sehr konstant' : sd < 14 ? 'normal' : 'schwankend';
+function throwExtras(pid) {
+  const ch = chunks(S.pub, pid).filter(c => inYear(c.d)), s = ch.map(c => c.s).join('');
+  let best = 0, bestMiss = 0, run = 0, mrun = 0, cur = 0;
+  for (const c of s) { if (c === '1') { run++; mrun = 0; best = Math.max(best, run); } else { mrun++; run = 0; bestMiss = Math.max(bestMiss, mrun); } }
+  for (let i = s.length - 1; i >= 0 && s[i] === '1'; i--) cur++;
+  let ah = 0, aht = 0, am = 0, amt = 0;   // nach Treffer / nach Fehlwurf – nur innerhalb eines Eintrags
+  for (const c of ch) for (let i = 1; i < c.s.length; i++) { if (c.s[i - 1] === '1') { aht++; if (c.s[i] === '1') ah++; } else { amt++; if (c.s[i] === '1') am++; } }
+  const tN = throwStats(pid, false, 'n'), sd = tN.bp.length >= 3 ? sdev(tN.bp) : null;
+  const gs = gamesIn().map(g => (g.s || {})[pid]).filter(x => x && x.n), gHit = gs.filter(x => x.h > 0).length;
+  return {n: s.length, best, bestMiss, cur, hot: aht >= 10 ? ah / aht * 100 : null, cold: amt >= 10 ? am / amt * 100 : null, aht, amt, sd, avgN: tN.avg, rel: sd != null ? tN.avg - sd / 2 : null, blocks: tN.bp.length, games: gs.length, gameRate: gs.length ? gHit / gs.length * 100 : null};
+}
 function allYears() {
   const ys = new Set();
   for (const t of S.pub.times) if (t.d) ys.add(t.d.slice(0, 4));
@@ -1923,7 +1968,8 @@ function overall({mode = S.gw.mode, per = S.gw.per, cat = S.gw.cat} = {}) {
     const bp = []; for (let i = 0; i + N <= s.length; i += N) bp.push([...s.slice(i, i + N)].filter(x => x === '1').length / N * 100);
     const exp = best[pid] != null ? fastest / best[pid] * 100 : null;
     const avgP = avg(bp), maxP = bp.length ? Math.max(...bp) : null, minP = bp.length ? Math.min(...bp) : null;
-    const w = ((mode === 'max' ? maxP : avgP) || 0) * 2;
+    const sdP = bp.length >= 3 ? sdev(bp) : null, relP = avgP != null ? avgP - (sdP || 0) / 2 : null;
+    const w = ((mode === 'max' ? maxP : mode === 'rel' ? relP : avgP) || 0) * 2;
     return {pid, time: best[pid] ?? null, exp, avgP, maxP, minP, bp, w, wAvg: (avgP || 0) * 2, wMax: (maxP || 0) * 2, sum: exp != null ? exp + w : null};
   });
   return {start, fastest: isFinite(fastest) ? fastest : null, rows: rows.filter(r => r.sum != null && r.bp.length).sort((a, b) => b.sum - a.sum), noTime: rows.filter(r => r.sum == null && r.bp.length), anyThrows: rows.some(r => r.bp.length)};
@@ -2173,10 +2219,11 @@ function exportXlsx() {
     sr.push([g.d ? {d: g.d} : '', gi + 1, g.k === 't' ? 'Turnier' : 'Training', sd ? g[sd].name : g.vs ? 'gegen ' + (g.vs.name || 'anderes Team') : '', ...nameParts(p), won == null ? '' : won ? 'Sieg' : 'Niederlage', st.n ? st.h : '', st.n || '', st.pen || '', (st.tb || []).join(', ')]); }));
   sheets.push({name: 'Spiele', rows: sr, widths: [11, 7, 9, 16, 14, 14, 11, 8, 7, 10, 20], freeze: {r: 1}});
   // Biere & Spiele pro Person
-  const ar = [['Nachname', 'Name', 'Spiele', 'Siege', 'Niederlagen', 'Siegesrate %', 'Biere gesamt', 'davon Ex', 'davon Spiele', 'Strafbiere', 'Ø Team-Treffer/Bier'].map(v => ({v, s: 1}))];
+  const sbx = canSeeBeers();
+  const ar = [['Nachname', 'Name', 'Spiele', 'Siege', 'Niederlagen', 'Siegesrate %', ...(sbx ? ['Biere gesamt', 'davon Ex', 'davon Spiele', 'davon Bierliste/Trainings (vor Nov. 2026)'] : []), 'Strafbiere', 'Ø Team-Treffer/Bier'].map(v => ({v, s: 1}))];
   const yr0 = S.year; S.year = 'all';
-  try { for (const pid of Object.keys(S.pub.people)) { const x = pStats(pid); if (x.g || x.ex) ar.push([...nameParts(pid), x.g, x.w, x.l, x.rate != null ? {v: x.rate, s: 3} : '', x.beers, x.ex, x.g, x.pen, x.tb.length ? {v: avg(x.tb), s: 3} : '']); } } finally { S.year = yr0; }
-  ar.push([], [{v: EXNOTE, s: 6}]);
+  try { for (const pid of Object.keys(S.pub.people)) { const x = pStats(pid); if (x.g || x.ex) ar.push([...nameParts(pid), x.g, x.w, x.l, x.rate != null ? {v: x.rate, s: 3} : '', ...(sbx ? [x.beers, x.ex, x.g, x.lb] : []), x.pen, x.tb.length ? {v: avg(x.tb), s: 3} : '']); } } finally { S.year = yr0; }
+  const CB0 = clubBeers(); ar.push([], [{v: EXNOTE, s: 6}], ...(CB0 ? [[{v: 'Verein gesamt: ' + CB0.total + ' Biere – ' + CLUBNOTE(CB0), s: 6}]] : []));
   sheets.push({name: 'Biere & Spiele', rows: ar, widths: [14, 14, 8, 8, 11, 12, 12, 9, 11, 10, 18], freeze: {r: 1}});
   const blob = XL.build(sheets), a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = `FFD_Statistik_${today()}.xlsx`; document.body.appendChild(a); a.click();
@@ -2253,8 +2300,10 @@ function renderHome() {
       <div class="kp"><div><b>${fmtP(tT ? hT / tT * 100 : null)}</b><span>Ø Quote</span></div><div><b>${fmtP(avg(stT.flatMap(x => x.bp)))}</b><span>Ø je Statistik</span></div><div><b>${stT.reduce((a, x) => a + x.blocks.length, 0)}</b><span>Statistiken</span></div></div></button>` : '';
   const exN = S.pub.times.filter(t => inYear(t.d)).length, GS = allGameStats();
   const ecard = exN ? `<div class="ocard static"><div class="top"><b>⏱️ Ex-Zeiten gesamt</b><span><b style="font-size:18px;color:var(--text)">${exN}</b> erfasst</span></div><p class="hint" style="margin:4px 0 0">${EXNOTE}</p></div>` : '';
-  const gcard = GS.games || GS.beers ? `<button class="ocard" data-g="1"><div class="top"><b>🍻 Spiele & Biere</b><span>${GS.games} Spiele ›</span></div>
-      <div class="kp"><div><b>${GS.beers}</b><span>Biere</span></div><div><b>${GS.pen}</b><span>Strafbiere</span></div><div><b>${Object.keys(GS.duos).length}</b><span>Duos</span></div></div></button>` : '';
+  const CB = S.year === 'all' ? clubBeers() : null;
+  const gcard = GS.games || GS.beers || CB ? `<button class="ocard" data-g="1"><div class="top"><b>🍻 Spiele & Biere</b><span>${GS.games} Spiele ›</span></div>
+      ${CB ? `<div class="rec">🍺 Verein gesamt <b>${CB.total}</b> Biere<br><small style="color:var(--muted)">${CLUBNOTE(CB)}</small></div>` : ''}
+      <div class="kp"><div><b>${CB ? CB.since : GS.beers}</b><span>${CB ? 'Biere seit ' + fmtD(CB.d) : 'Biere'}</span></div><div><b>${GS.pen}</b><span>Strafbiere</span></div><div><b>${Object.keys(GS.duos).length}</b><span>Duos</span></div></div></button>` : '';
   $('#homeCats').innerHTML = ecard + cards + wcard + tcard + gcard || '<div class="empty">Noch keine Einträge' + (S.year !== 'all' ? ' ' + yLbl() : '') + '</div>';
   $('#homeCats').onclick = e => {
     const b = e.target.closest('.ocard'); if (!b || b.classList.contains('static')) return;
@@ -2330,6 +2379,7 @@ function renderThrows() {
   const tot = st.reduce((a, x) => a + x.total, 0), hits = st.reduce((a, x) => a + x.hits, 0);
   const allBlocks = st.flatMap(x => x.bp);
   $('#throwHint').classList.toggle('hidden', !st.length);
+  $('#konsBtn').classList.toggle('hidden', !st.length || !seeSec('kons'));
   $('#throwKpis').classList.add('click'); $('#throwKpis').onclick = () => st.length && throwDevSheet();
   $('#throwKpis').innerHTML = st.length ? `<div><b>${st.length}</b><span>Spieler</span></div><div class="hl"><b>${tot}</b><span>Würfe gesamt</span></div>
     <div><b>${fmtP(tot ? hits / tot * 100 : null)}</b><span>Ø Quote</span></div><div><b>${fmtP(avg(allBlocks))}</b><span>Ø je Statistik</span></div>` : '';
@@ -2341,6 +2391,15 @@ function renderThrows() {
 }
 
 /* ---------- Ereignisse ---------- */
+$('#hq').oninput = () => {
+  const q = $('#hq').value.trim().toLowerCase(), el = $('#hqRes');
+  if (q.length < 1) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  const hits = Object.keys(S.pub.people).filter(id => nameOf(id).toLowerCase().includes(q) || shortOf(id).toLowerCase().includes(q) || ((S.pub.people[id].n || '').toLowerCase().includes(q))).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'de')).slice(0, 8);
+  el.classList.remove('hidden');
+  el.innerHTML = hits.map(id => `<button class="row click" data-pid="${id}"><span class="ic">👤</span><span class="nm">${esc(nameOf(id))}</span><span>›</span></button>`).join('') || '<div class="empty" style="padding:12px">Niemand gefunden</div>';
+};
+$('#hqRes').onclick = e => { const b = e.target.closest('[data-pid]'); if (b) { profileSheet(b.dataset.pid); $('#hq').value = ''; $('#hqRes').classList.add('hidden'); } };
+$('#konsBtn').onclick = () => konsSheet();
 $('#tabHome').onclick = () => { S.view = 'home'; render(); scrollTo(0, 0); };
 $('#homeRules').onclick = () => rulesSheet();
 $('#tabTour').onclick = () => { S.view = 'tour'; render(); scrollTo(0, 0); };
@@ -2415,7 +2474,7 @@ function menuSheet() {
       <button class="btn" id="mRules">📜 Regelwerke${isAdmin() ? ' bearbeiten' : ''}</button>
       ${B('tdates', 'mTour', '📅 Turnierdaten (' + (S.pub.tournaments || []).length + ')')}
       ${B('csv', 'mCsv', '⬇️ Statistiken herunterladen (Excel/CSV)')}
-      ${adm ? '<button class="btn" id="mSite">🔒 Seiten-Passwort' + (S.lock ? ' (aktiv)' : '') + '</button>' : ''}
+      ${adm ? '<button class="btn" id="mSite">🔒 Seiten-Passwort' + (S.lock ? ' (aktiv)' : '') + '</button><button class="btn" id="mBeerVis">👤 Profil-Ansicht (wer sieht was)</button>' : ''}
       ${adm ? `<button class="btn" id="mEd">🔑 Freigeber & Passwörter</button>
       <button class="btn" id="mSub">📨 Eintragen ohne Login ${S.pub.subTok ? '(aktiv)' : '(einrichten)'}</button>
       <button class="btn" id="mTT">🏆 Turnier-Wurfstatistik: ${tourOn() ? 'sichtbar – ausblenden' : 'ausgeblendet – einblenden'}</button>
@@ -2426,7 +2485,7 @@ function menuSheet() {
     </div>`);
   const on = (id, f) => { const el = $('#' + id); if (el) el.onclick = f; };
   on('mApp', approvalsSheet); on('mPeople', peopleSheet); on('mCats', categoriesSheet); on('mStat', statSizeSheet);
-  on('mTour', tournamentsSheet); on('mRules', rulesSheet); on('mCsv', exportSheet); on('mSite', sitePwSheet);
+  on('mTour', tournamentsSheet); on('mRules', rulesSheet); on('mCsv', exportSheet); on('mSite', sitePwSheet); on('mBeerVis', beerVisSheet);
   if (adm) $('#mTT').onclick = () => guarded(async () => { const on = tourOn(); await save(on ? 'Turnier-Würfe ausgeblendet' : 'Turnier-Würfe eingeblendet', ctx => { ctx.pub.settings.tourThrows = !on; }, {okText: on ? 'Ausgeblendet ✓ (Daten bleiben erhalten)' : 'Eingeblendet ✓'}); menuSheet(); });
   if (adm) { $('#mEd').onclick = editorsSheet; $('#mSub').onclick = subTokSheet; $('#mImp').onclick = importSheet; $('#mTok').onclick = tokenSheet; }
   $('#mGame').onclick = () => gameSheet();
@@ -2541,10 +2600,11 @@ function editorSheet(eid) {
         if (pw) x.wrap = await wrapK(ki, pw);
         // Namens-Schlüssel nur für Freigeber, die volle Namen sehen dürfen
         if (perm.includes('names') && S.KNraw) x.kn = await aesEnc(await importK(ki), S.KNraw); else if (!perm.includes('names')) delete x.kn;
+        if (perm.includes('notes')) { const kt = await ensureNotesKey(ctx); x.kt = await aesEnc(await importK(ki), kt); } else delete x.kt;
         eds[eid] = x;
       } else {
         const ki = newRaw(), Ki = await importK(ki);
-        eds[rid('e')] = {name: nm, perm, wrap: await wrapK(ki, pw), kA: await aesEnc(S.KA, ki), tok: await encS(Ki, S.token), ...(S.KNraw && perm.includes('names') ? {kn: await aesEnc(Ki, S.KNraw)} : {})};
+        eds[rid('e')] = {name: nm, perm, wrap: await wrapK(ki, pw), kA: await aesEnc(S.KA, ki), tok: await encS(Ki, S.token), ...(S.KNraw && perm.includes('names') ? {kn: await aesEnc(Ki, S.KNraw)} : {}), ...(perm.includes('notes') ? {kt: await aesEnc(Ki, await ensureNotesKey(ctx))} : {})};
       }
       ctx.newSecret = {...f, editors: eds};
     }, {okText: e ? 'Gespeichert ✓' : 'Freigeber angelegt ✓ Gib ' + nm + ' jetzt das Passwort.'});
@@ -3200,7 +3260,9 @@ function importSheet() {
     <div class="err" id="err"></div><button class="btn pri" id="go">Importieren</button>`);
   $('#go').onclick = () => guarded(async () => {
     const file = $('#f').files[0]; if (!file) throw new Error('Bitte Datei auswählen.');
-    const imp = JSON.parse(await file.text()); if (!imp.ffdImport) throw new Error('Das ist keine Import-Datei.');
+    const imp = JSON.parse(await file.text());
+    if (imp.ffdBeerLists) return beerImportSheet(imp);
+    if (!imp.ffdImport) throw new Error('Das ist keine Import-Datei.');
     let addT = 0, addW = 0, repl = 0;
     await save('Alte Daten importiert', ctx => {
       for (const np of (imp.newPeople || [])) if (!ctx.pub.people[np.id]) { ctx.pub.people[np.id] = {s: np.f}; ctx.names[np.id] = {f: np.f, l: np.l}; ctx.namesDirty = true; }
@@ -3228,6 +3290,49 @@ function importSheet() {
   }, $('#err'));
 }
 
+/* Bierlisten einmalig übernehmen: Namen zuordnen (Vorschau), fehlende Personen anlegen, Vereinsstand setzen */
+function beerImportSheet(imp) {
+  if (!S.names) return toast('Nur mit vollen Namen möglich (Admin).');
+  const norm = x => String(x || '').toLowerCase().replace(/^(van|von|de|da)\s+/, '').replace(/[^a-zäöüß]/g, '');
+  const lev = (a, b) => { const d = Array.from({length: a.length + 1}, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+  const people = Object.entries(S.names).filter(([id]) => S.pub.people[id]);
+  const match = e => { const L = norm(e.l), F = norm(e.f);
+    let m = people.filter(([, n]) => norm(n.l) === L && norm(n.f) === F); if (m.length === 1) return m[0][0];
+    m = people.filter(([, n]) => norm(n.f) === F && (lev(norm(n.l), L) <= 2 || norm(n.l).includes(L) || L.includes(norm(n.l)))); if (m.length === 1) return m[0][0];
+    return 'new'; };
+  const map = imp.entries.map(e => match(e));
+  const opts = sel => `<option value="new" ${sel === 'new' ? 'selected' : ''}>➕ neu anlegen</option><option value="skip">– nicht übernehmen –</option>` + people.slice().sort((a, b) => fullName(a[1]).localeCompare(fullName(b[1]), 'de')).map(([id, n]) => `<option value="${id}" ${sel === id ? 'selected' : ''}>${esc(fullName(n))}</option>`).join('');
+  openSheet(`<h2>🍺 Bierliste/Trainings übernehmen</h2><p class="sub">${imp.entries.length} Personen · ${imp.entries.reduce((a, e) => a + e.n, 0)} Biere aus ${imp.lists.length} Listen${imp.trainings ? ' und ' + imp.trainings.length + ' Trainings' : ''} (bis ${fmtD(imp.stand)}). Bitte die Zuordnung prüfen.</p>
+    <div class="list">${imp.entries.map((e, i) => `<div class="row" style="gap:8px"><span class="nm" style="flex:1">${esc(e.f + ' ' + e.l)}${e.rename ? ' → ' + esc(e.rename) : ''}<small>${e.n} Biere${e.train ? ' (davon ' + e.train + ' Trainings)' : ''}</small></span><select class="inp" data-i="${i}" style="flex:1.2;padding:6px">${opts(map[i])}</select></div>`).join('')}</div>
+    <p class="hint">Vereinsstand: <b>${imp.base}</b> Biere bis ${fmtD(imp.baseDate)}. Ex-Zeiten von ${fmtD(imp.from)} bis ${fmtD(imp.stand)} werden von den Listenwerten abgezogen.</p>
+    <div class="err" id="err"></div><button class="btn pri" id="go">Übernehmen</button>`);
+  $('#sheetBody').querySelectorAll('select[data-i]').forEach(el => el.onchange = () => { map[+el.dataset.i] = el.value; });
+  $('#go').onclick = () => guarded(async () => {
+    let made = 0;
+    await save('Bierlisten übernommen', ctx => {
+      const per = {};
+      imp.entries.forEach((e, i) => {
+        let pid = map[i]; if (pid === 'skip') return;
+        if (pid === 'new' || !ctx.pub.people[pid]) { pid = createPerson(ctx, {f: e.rename || e.f, l: e.l}); made++; }
+        else if (e.rename && ctx.names[pid]) { ctx.names[pid] = {...ctx.names[pid], f: e.rename}; ctx.namesDirty = true; }
+        if (e.n) per[pid] = (per[pid] || 0) + e.n;
+      });
+      ctx.pub.beerLists = {from: imp.from, stand: imp.stand, lists: imp.lists, per};
+      ctx.pub.beerBase = {n: imp.base, d: imp.baseDate};
+    }, {busyText: 'Übernehme …', quiet: true});
+    closeSheet(true); toast(`Bierlisten übernommen ✓ ${made} neue Personen`);
+  }, $('#err'));
+}
+/* Admin: Was darf wer im Profil sehen? */
+function beerVisSheet() {
+  const cur = Object.fromEntries(PSECS.map(([k]) => [k, secLvl(k)]));
+  openSheet(`<h2>👤 Profil-Ansicht</h2><p class="sub">Pro Bereich festlegen, wer ihn im Profil sehen darf. „Biere getrunken“ gilt auch für „Meiste Biere“, den Vergleich und die Excel-Datei. Die Vereins-Gesamtzahl der Biere sieht immer jeder.</p>
+    ${PSECS.map(([k, n]) => `<div class="pvis"><span>${n}</span><div class="seg" data-k="${k}">${[['all', 'Alle'], ['editors', 'Freigeber'], ['admin', 'Admin']].map(([v, l]) => `<button data-v="${v}" class="${cur[k] === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>`).join('')}
+    <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button>`);
+  $('#sheetBody').querySelectorAll('.pvis .seg').forEach(sg => sg.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; cur[sg.dataset.k] = b.dataset.v; [...sg.children].forEach(x => x.classList.toggle('on', x === b)); });
+  $('#go').onclick = () => guarded(async () => { await save('Profil-Ansicht geändert', ctx => { ctx.pub.settings.vis = {...cur}; delete ctx.pub.settings.beerVis; }, {okText: 'Gespeichert ✓'}); closeSheet(true); }, $('#err'));
+}
 /* ---------- Entwicklung der Durchschnittswerte ---------- */
 const monthLbl = m => new Date(m + '-15T12:00:00').toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
 function catDevSheet(cat) {
@@ -3283,7 +3388,7 @@ function curvePath(pts) {
   }
   return d;
 }
-function lineChart(points, {fmt, lowerBetter = false, maxY = null, minY = null} = {}) {
+function lineChart(points, {fmt, lowerBetter = false, maxY = null, minY = null, band = null} = {}) {
   if (points.length < 2) return '';
   const W = 320, H = 120, pl = 40, pr = 10, pt = 10, pb = 22;
   const ys = points.map(p => p.y);
@@ -3299,9 +3404,10 @@ function lineChart(points, {fmt, lowerBetter = false, maxY = null, minY = null} 
   return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img">
     ${ticks.map(t => `<line x1="${pl}" x2="${W - pr}" y1="${Y(t)}" y2="${Y(t)}" class="grid"/><text x="${pl - 6}" y="${Y(t) + 4}" text-anchor="end" class="ax">${fmt(t)}</text>`).join('')}
     <text x="${pl}" y="${H - 6}" class="ax">${esc(points[0].label)}</text><text x="${W - pr}" y="${H - 6}" text-anchor="end" class="ax">${esc(points[points.length - 1].label)}</text>
+    ${band ? `<rect x="${pl}" width="${W - pl - pr}" y="${Y(Math.min(hi, band[1]))}" height="${Math.max(0, Y(Math.max(lo, band[0])) - Y(Math.min(hi, band[1])))}" class="band"/>` : ''}
     ${tr ? `<path d="${tr}" class="trend"/>` : ''}<path d="${path}" class="ln${tr ? ' raw' : ''}"/>
     ${points.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p.y)}" r="${i === bi ? 5.5 : 4}" class="pt ${i === bi ? 'best' : ''}"/><circle cx="${X(i)}" cy="${Y(p.y)}" r="14" class="hit" data-tip="${esc(p.label + ': ' + fmt(p.y))}"/>`).join('')}
-  </svg>${tr ? '<div class="legend"><span><i class="lr"></i>Werte</span><span><i class="lt"></i>Trend</span></div>' : ''}<div class="tip">Punkt antippen für Details${lowerBetter ? ' · weiter unten = schneller' : ''}</div></div>`;
+  </svg>${tr ? `<div class="legend"><span><i class="lr"></i>Werte</span><span><i class="lt"></i>Trend</span>${band ? '<span><i class="lb"></i>typischer Bereich</span>' : ''}</div>` : ''}<div class="tip">Punkt antippen für Details${lowerBetter ? ' · weiter unten = schneller' : ''}</div></div>`;
 }
 function wireCharts(root) {
   root.querySelectorAll('.chart').forEach(ch => {
@@ -3313,6 +3419,28 @@ function wireCharts(root) {
 const gPlayers = g => g.players || [...((g.a || {}).players || []), ...((g.b || {}).players || [])];
 const gSide = (g, p) => g.a && g.a.players.includes(p) ? 'a' : g.b && g.b.players.includes(p) ? 'b' : '';
 function gamesIn() { return (S.pub.games || []).filter(g => inYear(g.d)); }
+/* Bierlisten (vor November 2026): Liste minus Ex-Zeiten im Listenzeitraum; nur in „Alle Jahre“ */
+/* Profil-Ansicht: Admin legt pro Bereich fest, wer ihn sehen darf (alle / Freigeber & Admin / nur Admin) */
+const PSECS = [['cmp', '⚖️ Vergleichen-Knopf'], ['games', '🍻 Spiele, Siege, Siegesrate'], ['beers', '🍺 Biere getrunken'], ['tsz', '🎯 Wurfquote nach Teamgröße'], ['rel', '👥 Mitspieler & Gegner'],
+  ['glist', '🎯 Letzte Spiele'], ['tour', '🏆 Turniere & Elo'], ['ex', '⏱️ Ex-Zeiten'], ['thr', '🎯 Wurfstatistik'], ['thrT', '🏆 Turnier-Würfe'], ['kons', '📊 Konstanz, Serien, Heiße Hand, Spielquote']];
+const secLvl = k => { const st = S.pub.settings || {}; return (st.vis || {})[k] || (k === 'beers' ? st.beerVis : null) || 'all'; };
+const seeSec = k => { const v = secLvl(k); return v === 'all' || (v === 'editors' && !!S.role) || isAdmin(); };
+const canSeeBeers = () => seeSec('beers');
+function listBeers(pid) {
+  const B = S.pub.beerLists; if (!B || S.year !== 'all') return 0;
+  const raw = (B.per || {})[pid] || 0; if (!raw) return 0;
+  const ex = S.pub.times.filter(t => t.p.includes(pid) && t.d && t.d >= B.from && t.d <= B.stand).length;
+  return Math.max(0, raw - ex);
+}
+/* Vereins-Bierzähler: Stand aus den Ausgaben + alles, was seit dem Stichtag erfasst wurde */
+function clubBeers() {
+  const B = S.pub.beerBase; if (!B) return null;
+  let since = 0;
+  for (const t of S.pub.times) if (t.d && t.d > B.d) since += t.p.length;
+  for (const g of S.pub.games || []) if (g.d && g.d > B.d) for (const p of gPlayers(g)) since += 1 + (((g.s || {})[p] || {}).pen || 0);
+  return {base: B.n, d: B.d, since, total: B.n + since};
+}
+const CLUBNOTE = b => `${b.base} Biere bis ${fmtD(b.d)} – aus den Ausgaben abgeleitet, zum Teil über Bierlisten und Trainings Personen zugeordnet${b.since ? ` · + ${b.since} seitdem in der App erfasst` : ''}`;
 function pStats(pid, games = gamesIn()) {
   const x = {g: 0, w: 0, l: 0, pen: 0, tb: [], h: 0, n: 0, mates: {}, opp: {}, ex: 0};
   for (const g of games) {
@@ -3330,25 +3458,27 @@ function pStats(pid, games = gamesIn()) {
     for (const q of g[sd === 'a' ? 'b' : 'a'].players) { const m = x.opp[q] ||= {n: 0, w: 0, d: 0}; m.n++; if (won != null) m.d++; if (won) m.w++; }
   }
   x.ex = S.pub.times.filter(t => t.p.includes(pid) && inYear(t.d)).length;
-  x.beers = x.g + x.pen + x.ex;
+  x.lb = listBeers(pid);
+  x.beers = x.g + x.pen + x.ex + x.lb;
   x.rate = x.w + x.l ? x.w / (x.w + x.l) * 100 : null;
   return x;
 }
-const EXNOTE = 'Vor November 2026 wurden nur neue Bestzeiten erfasst – abgenommen wurden schon über 1000 Ex.';
+const EXNOTE = 'Vor November 2026 wurden nur neue Bestzeiten erfasst – abgenommen wurden schon über 1000 Ex-Zeiten.';
 function relList(map, lbl) {
   const rows = Object.entries(map).filter(([q]) => S.pub.people[q]).sort((a, b) => b[1].n - a[1].n || b[1].w - a[1].w).slice(0, 5);
   return rows.length ? `<div class="rel"><span class="rh">${lbl}</span>${rows.map(([q, m]) => `<button class="click" data-pid="${q}"><span class="pn">${esc(nameOf(q))}</span><span>${m.n}×</span><b>${m.d ? fmtP(m.w / m.d * 100) : '–'}</b></button>`).join('')}</div>` : '';
 }
 function spielCard(pid) {
   const x = pStats(pid);
-  if (!x.g && !x.ex) return '';
-  const tbAvg = x.tb.length ? avg(x.tb) : null;
-  return `<div class="card" id="pGames"><div class="statinfo"><div><b>🍻 Spiele & Biere</b><br><span>${x.g} ${x.g === 1 ? 'Spiel' : 'Spiele'}${x.w + x.l ? ' · ' + x.w + ' S / ' + x.l + ' N' : ''}</span></div>
-    ${x.rate != null ? `<div style="text-align:right"><span>Siegesrate</span><br><b style="color:var(--gold2);font-size:20px">${fmtP(x.rate)}</b></div>` : ''}</div>
-    <div class="bigstat"><div><b>${x.beers}</b><span>Biere getrunken</span></div><div><b>${x.pen}</b><span>Strafbiere erhalten</span></div><div><b>${tbAvg != null ? num2(tbAvg).replace(',00', '') : '–'}</b><span>Ø Team-Treffer/Bier</span></div></div>
-    <p class="hint" style="margin:6px 0">Biere: ${x.ex} aus Ex-Zeiten · ${x.g} aus Spielen · ${x.pen} Strafbiere${x.ex ? '<br><small>' + EXNOTE + '</small>' : ''}</p>
-    ${relList(x.mates, '👥 Häufigste Mitspieler · Siegquote zusammen')}${relList(x.opp, '⚔️ Häufigste Gegner · eigene Siegquote')}
-    ${gameList(pid)}</div>`;
+  if (!x.g && !x.ex && !x.lb) return '';
+  const tbAvg = x.tb.length ? avg(x.tb) : null, sb = canSeeBeers(), sg = seeSec('games');
+  if (!sg && !sb && !seeSec('tsz') && !seeSec('rel') && !seeSec('glist')) return '';
+  return `<div class="card" id="pGames"><div class="statinfo"><div><b>🍻 Spiele & Biere</b><br><span>${sg ? `${x.g} ${x.g === 1 ? 'Spiel' : 'Spiele'}${x.w + x.l ? ' · ' + x.w + ' S / ' + x.l + ' N' : ''}` : ''}</span></div>
+    ${sg && x.rate != null ? `<div style="text-align:right"><span>Siegesrate</span><br><b style="color:var(--gold2);font-size:20px">${fmtP(x.rate)}</b></div>` : ''}</div>
+    ${sg || sb ? `<div class="bigstat">${sb ? `<div><b>${x.beers}</b><span>Biere getrunken</span></div>` : ''}${sg ? `<div><b>${x.pen}</b><span>Strafbiere erhalten</span></div><div><b>${tbAvg != null ? num2(tbAvg).replace(',00', '') : '–'}</b><span>Ø Team-Treffer/Bier</span></div>` : ''}</div>` : ''}
+    ${sb ? `<p class="hint" style="margin:6px 0">Biere: ${x.ex} aus Ex-Zeiten · ${x.g} aus Spielen · ${x.pen} Strafbiere${x.lb ? ' · ' + x.lb + ' aus Bierliste/Trainings (vor November 2026)' : ''}${x.ex ? '<br><small>' + EXNOTE + '</small>' : ''}${S.pub.beerLists && S.year !== 'all' ? '<br><small>Bierliste/Trainings zählen nur bei „Alle Jahre“.</small>' : ''}</p>` : ''}
+    ${seeSec('tsz') ? teamSizeHtml(pid) : ''}${seeSec('rel') ? relList(x.mates, '👥 Häufigste Mitspieler · Siegquote zusammen') + relList(x.opp, '⚔️ Häufigste Gegner · eigene Siegquote') : ''}
+    ${seeSec('glist') ? gameList(pid) : ''}</div>`;
 }
 function gameList(pid) {
   const L = gamesIn().filter(g => gPlayers(g).includes(pid)).slice(-10).reverse(); if (!L.length) return '';
@@ -3356,6 +3486,24 @@ function gameList(pid) {
     const won = g.vs ? (g.vs.w ? g.vs.w === 'w' : null) : g.w && sd ? g.w === sd : null;
     const res = won == null ? '' : won ? '<b style="color:#50c878">Sieg</b>' : '<b style="color:var(--bad)">Niederlage</b>';
     return `<div class="grow"><span>${fmtD(g.d)}${g.k === 't' ? ' 🏆' : ''}</span><span class="pn">${g.a ? esc(g.a.name) + ' vs ' + esc(g.b.name) : g.vs ? '🆚 ' + esc(g.vs.name || 'anderes Team') : 'ohne Teams'}${st.n ? ' · ' + st.h + '/' + st.n : ''}${st.pen ? ' · ' + st.pen + ' Strafbier' : ''}</span>${res}${can('delete') ? `<span class="trash" data-gdel="${g.id}" title="Spiel löschen">🗑</span>` : ''}</div>`; }).join('')}</div>`;
+}
+/* Wurfquote nach Größe des eigenen Teams (nur Spiele mit Teams bzw. „gegen andere“), sofort ohne volle Statistik */
+function teamSizeStats(pid) {
+  const o = {};
+  for (const g of gamesIn()) {
+    const sizeOf = p => { const sd = gSide(g, p); return sd ? g[sd].players.length : g.vs ? gPlayers(g).length : 0; };
+    for (const p of pid ? [pid] : gPlayers(g)) {
+      const st = (g.s || {})[p]; if (!st || !st.n) continue;
+      const k = sizeOf(p); if (!k) continue;
+      const x = o[k] ||= {h: 0, n: 0, g: 0}; x.h += st.h; x.n += st.n; x.g++;
+    }
+  }
+  return Object.entries(o).map(([k, x]) => ({k: +k, ...x})).sort((a, b) => a.k - b.k);
+}
+function teamSizeHtml(pid) {
+  const L = teamSizeStats(pid); if (!L.length) return '';
+  const max = Math.max(...L.map(x => x.h / x.n));
+  return `<div class="rel"><span class="rh">🎯 Wurfquote nach Teamgröße${pid ? '' : ' (alle Spieler)'}</span>${L.map(x => `<div class="tsz"><span>${x.k === 1 ? 'allein' : x.k + 'er-Team'}</span><div class="bar"><i style="width:${x.h / x.n * 100}%;${x.h / x.n === max ? '' : 'opacity:.6'}"></i></div><b>${fmtP(x.h / x.n * 100)}</b><small>${x.h}/${x.n} · ${x.g} ${x.g === 1 ? 'Spiel' : 'Spiele'}</small></div>`).join('')}</div>`;
 }
 /* Ein Spiel als Listenzeile (Startseite, Alle Spiele) */
 function gameRow(g) {
@@ -3400,6 +3548,39 @@ function allGamesSheet() {
   openSheet(`<h2>🎯 Alle Spiele</h2><p class="sub">${L.length} Spiele · ${S.year === 'all' ? 'alle Jahre' : yLbl('')}${can('delete') ? ' · 🗑 zum Löschen' : ''}</p><div class="list">${L.map(gameRow).join('') || '<div class="empty">Noch keine Spiele</div>'}</div>`);
   wireGameRows($('#sheetBody'), allGamesSheet);
 }
+/* Interne Notizen zu einer Person – nur für Admin und Freigeber mit dem Recht „Interne Notizen“ */
+function notesCard(pid) {
+  if (!can('notes') || !(S.KT || isAdmin())) return '';
+  const L = (S.notes || {})[pid] || [];
+  return `<div class="card notes"><b>🔒 Interne Notizen</b><small style="color:var(--muted)"> · nur für Berechtigte sichtbar</small>
+    ${L.map((n, i) => `<div class="grow"><span class="pn" style="white-space:normal">${esc(n.x)}<br><small style="color:var(--muted)">${esc(n.by || '')} · ${fmtD(n.d)}</small></span><span class="trash" data-ndel="${i}">🗑</span></div>`).join('')}
+    <div style="display:flex;gap:6px;margin-top:8px"><input class="inp" id="noteTxt" maxlength="500" placeholder="Notiz hinzufügen …" style="flex:1"><button class="btn pri" id="noteAdd" style="margin:0;width:auto;padding:0 14px">＋</button></div></div>`;
+}
+function konsCard(pid) {
+  const e = throwExtras(pid); if (!e.n) return '';
+  return `<div class="card" id="pKons"><b>📊 Konstanz & Serien</b>
+    <div class="bigstat"><div><b>${e.sd != null ? '±' + num2(e.sd).replace(/,?0+$/, '') : '–'}</b><span>Schwankung${e.sd != null ? '<br>' + konsLbl(e.sd) : ''}</span></div><div><b>${e.rel != null ? fmtP(e.rel) : '–'}</b><span>Verlässlicher Wert</span></div><div><b>${e.best}</b><span>längste Trefferserie</span></div></div>
+    <div class="rel"><div class="grow"><span class="pn">🔥 Treffer nach Treffer</span><b>${e.hot != null ? fmtP(e.hot) : '–'}</b></div><div class="grow"><span class="pn">🧊 Treffer nach Fehlwurf</span><b>${e.cold != null ? fmtP(e.cold) : '–'}</b></div>
+    <div class="grow"><span class="pn">🎯 Spiele mit mind. 1 Treffer</span><b>${e.gameRate != null ? fmtP(e.gameRate) + ' <small style="color:var(--muted)">(' + e.games + ')</small>' : '–'}</b></div>
+    <div class="grow"><span class="pn">Aktuelle Serie · meiste Fehlwürfe in Folge</span><b>${e.cur} · ${e.bestMiss}</b></div></div>
+    <p class="hint" style="margin:6px 0 0">Schwankung = wie weit die Statistiken typischerweise vom eigenen Schnitt abweichen (ab 3 Statistiken). Verlässlicher Wert = Ø minus halbe Schwankung. „Heiße Hand“ ab 10 Würfen.</p></div>`;
+}
+function konsSheet() {
+  const ids = Object.keys(S.pub.people).map(id => ({id, ...throwExtras(id)})).filter(x => x.n);
+  const lst = (rows, f) => rows.map((x, i) => `<button class="row click" data-pid="${x.id}"><span class="pl">${i + 1}</span><span class="nm">${esc(nameOf(x.id))}</span><span class="tm">${f(x)}</span></button>`).join('') || '<div class="empty">Noch zu wenige Daten</div>';
+  const sd = ids.filter(x => x.sd != null && x.blocks >= 5).sort((a, b) => a.sd - b.sd).slice(0, 10);
+  const rel = ids.filter(x => x.rel != null && x.blocks >= 3).sort((a, b) => b.rel - a.rel).slice(0, 10);
+  const st = ids.slice().sort((a, b) => b.best - a.best).slice(0, 10);
+  const hot = ids.filter(x => x.hot != null && x.cold != null).sort((a, b) => (b.hot - b.cold) - (a.hot - a.cold)).slice(0, 10);
+  const gr = ids.filter(x => x.games >= 3).sort((a, b) => b.gameRate - a.gameRate).slice(0, 10);
+  openSheet(`<h2>📊 Konstanz & Serien</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')}</p>
+    <h3 class="sect">Konstanteste Werfer <small style="font-weight:400">(ab 5 Statistiken)</small></h3><div class="list">${lst(sd, x => '±' + num2(x.sd))}</div>
+    <h3 class="sect">Verlässlichster Wert <small style="font-weight:400">(Ø − ½ Schwankung)</small></h3><div class="list">${lst(rel, x => fmtP(x.rel))}</div>
+    <h3 class="sect">Längste Trefferserie</h3><div class="list">${lst(st, x => x.best + ' in Folge')}</div>
+    <h3 class="sect">🔥 Heiße Hand <small style="font-weight:400">(nach Treffer vs. nach Fehlwurf)</small></h3><div class="list">${lst(hot, x => fmtP(x.hot) + ' / ' + fmtP(x.cold))}</div>
+    <h3 class="sect">Spiele mit mind. 1 Treffer <small style="font-weight:400">(ab 3 Spielen)</small></h3><div class="list">${lst(gr, x => fmtP(x.gameRate))}</div>`);
+  $('#sheetBody').onclick = e => { const b = e.target.closest('[data-pid]'); if (b) profileSheet(b.dataset.pid); };
+}
 /* Gesamtstatistik: Spiele, Biere, Duos */
 function allGameStats() {
   const games = gamesIn(), per = {}, duos = {};
@@ -3415,9 +3596,11 @@ function gamesSheet() {
   const top = (f, n = 10) => Object.entries(A.per).sort((a, b) => f(b[1]) - f(a[1])).filter(([, x]) => f(x) > 0).slice(0, n);
   const lst = (rows, f, sfx) => rows.map(([p, x], i) => `<button class="row click" data-pid="${p}"><span class="pl">${i + 1}</span><span class="nm">${esc(nameOf(p))}</span><span class="tm">${f(x)}${sfx}</span></button>`).join('') || '<div class="empty">Noch keine Daten</div>';
   openSheet(`<h2>🍻 Spiele & Biere</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')} · aus den im Spielmodus gespeicherten Spielen und den Ex-Zeiten</p>
-    <div class="kp" style="margin-bottom:6px"><div><b>${A.games}</b><span>Spiele</span></div><div><b>${A.beers}</b><span>Biere</span></div><div><b>${A.pen}</b><span>Strafbiere</span></div></div>
+    ${(() => { const CB = S.year === 'all' ? clubBeers() : null; return CB ? `<div class="rec" style="margin-bottom:8px">🍺 Verein gesamt <b>${CB.total}</b> Biere<br><small style="color:var(--muted)">${CLUBNOTE(CB)}</small></div>` : ''; })()}
+    <div class="kp" style="margin-bottom:6px"><div><b>${A.games}</b><span>Spiele</span></div><div><b>${A.beers}</b><span>Biere (Personen)</span></div><div><b>${A.pen}</b><span>Strafbiere</span></div></div>
     <p class="hint">${EXNOTE}</p>
-    <h3 class="sect">Meiste Biere</h3><div class="list">${lst(top(x => x.beers), x => x.beers, ' 🍺')}</div>
+    ${teamSizeHtml(null)}
+    ${canSeeBeers() ? `<h3 class="sect">Meiste Biere</h3><div class="list">${lst(top(x => x.beers), x => x.beers, ' 🍺')}</div>` : ''}
     <h3 class="sect">Meiste Spiele</h3><div class="list">${lst(top(x => x.g), x => x.g, '')}</div>
     <h3 class="sect">Beste Siegesrate <small style="font-weight:400">(ab 5 Spielen mit Sieger)</small></h3><div class="list">${lst(Object.entries(A.per).filter(([, x]) => x.w + x.l >= 5).sort((a, b) => b[1].rate - a[1].rate).slice(0, 10), x => fmtP(x.rate), '')}</div>
     <h3 class="sect">Meiste Strafbiere</h3><div class="list">${lst(top(x => x.pen), x => x.pen, '')}</div>
@@ -3462,7 +3645,7 @@ function compareSheet(p1, p2) {
   add('📈 Elo', E[p1] ? Math.round(E[p1].r) : null, E[p2] ? Math.round(E[p2].r) : null);
   const g1 = pStats(p1), g2 = pStats(p2);
   add('🍻 Spiele', g1.g || null, g2.g || null); add('🏆 Siegesrate', g1.rate, g2.rate, fmtP);
-  add('🍺 Biere getrunken', g1.beers || null, g2.beers || null); add('🍺 Strafbiere', g1.pen, g2.pen, v => v, 'low');
+  if (canSeeBeers()) add('🍺 Biere getrunken', g1.beers || null, g2.beers || null); add('🍺 Strafbiere', g1.pen, g2.pen, v => v, 'low');
   add('🍺 Ø Team-Treffer/Bier', g1.tb.length ? avg(g1.tb) : null, g2.tb.length ? avg(g2.tb) : null, v => num2(v).replace(',00', ''), 'low');
   const vs = g1.opp[p2], tog = g1.mates[p2];
   openSheet(`<h2>⚖️ Vergleich</h2><p class="sub">${S.year === 'all' ? 'Alle Jahre' : yLbl('')} · der bessere Wert ist hervorgehoben</p>
@@ -3507,22 +3690,28 @@ function profileSheet(pid, focusCat, focusThrows) {
     return `<div class="card" id="${k === 't' ? 'pThrowsT' : 'pThrows'}" data-k="${k}">
       <div class="statinfo"><div><b>${k === 't' ? '🏆 Turnier-Wurfstatistik' : 'Wurfstatistik'}</b><br><span>1 Statistik = ${x.N} Würfe</span></div></div>
       <div class="bigstat"><div><b>${fmtP(x.pct)}</b><span>Gesamt (${x.hits}/${x.total})</span></div><div><b>${fmtP(x.avg)}</b><span>Ø pro Statistik</span></div><div><b>${fmtP(x.best)}</b><span>Beste</span></div></div>
-      ${lineChart(bpts, {fmt: v => Math.round(v) + ' %', minY: 0, maxY: 100})}
+      ${lineChart(bpts, {fmt: v => Math.round(v) + ' %', minY: 0, maxY: 100, band: x.bp.length >= 3 && seeSec('kons') ? [x.avg - sdev(x.bp), x.avg + sdev(x.bp)] : null})}
       ${k === 't' ? perTour(pid) : ''}
       ${x.cur.length ? `<div class="blk"><span class="n">Laufend</span><span class="b"><div class="bar"><i style="width:${x.cur.length / x.N * 100}%;background:var(--muted)"></i></div></span><span class="v">${x.curHits}/${x.cur.length} von ${x.N}</span>${adm ? `<span class="trash" data-blk="cur" title="Löschen">🗑</span>` : ''}</div>` : ''}
       ${x.blocks.map((b, i) => ({i: i + 1, ...b})).reverse().map(b => `<div class="blk"><span class="n">Stat. ${b.i}<br><small>${fmtD(b.d)}</small></span><span class="b"><div class="bar"><i style="width:${b.hits / b.n * 100}%"></i></div></span><span class="v">${fmtP(b.hits / b.n * 100)} <small style="color:var(--muted);font-weight:400">${b.hits}/${b.n}</small></span>${adm ? `<span class="trash" data-blk="${b.i - 1}" title="Löschen">🗑</span>` : ''}</div>`).join('')}
     </div>`; };
-  const throwsHtml = tcard('n') + tcard('t');
+  const throwsHtml = (seeSec('thr') ? tcard('n') : '') + (seeSec('thrT') ? tcard('t') : '') + (seeSec('kons') ? konsCard(pid) : '');
   const p = S.pub.people[pid];
   openSheet(`<h2>${esc(nameOf(pid))}</h2><p class="sub">${p && p.n && !adm ? '' : ''}Entwicklung ${S.year === 'all' ? 'über alle Versuche' : yLbl()}</p>
-    <div class="two" style="margin-bottom:8px"><button class="btn ghost" id="cmpBtn" style="margin:0">⚖️ Vergleichen</button><button class="btn ghost" id="nickBtn" style="margin:0">🏷️ Spitzname ${can('people') ? 'ändern' : 'vorschlagen'}</button></div>
-    ${spielCard(pid)}${window.TOUR ? TOUR.tProfileHtml(pid) : ''}${cats}${throwsHtml}${!cats && !throwsHtml ? '<div class="empty">Keine Einträge' + (S.year !== 'all' ? ' ' + yLbl() : '') + '</div>' : ''}
+    <div class="two" style="margin-bottom:8px">${seeSec('cmp') ? '<button class="btn ghost" id="cmpBtn" style="margin:0">⚖️ Vergleichen</button>' : '<span></span>'}<button class="btn ghost" id="nickBtn" style="margin:0">🏷️ Spitzname ${can('people') ? 'ändern' : 'vorschlagen'}</button></div>
+    ${notesCard(pid)}${spielCard(pid)}${window.TOUR && seeSec('tour') ? TOUR.tProfileHtml(pid) : ''}${seeSec('ex') ? cats : ''}${throwsHtml}${!cats && !throwsHtml ? '<div class="empty">Keine Einträge' + (S.year !== 'all' ? ' ' + yLbl() : '') + '</div>' : ''}
     <button class="btn pri" id="enter">${canDirect() ? 'Würfe eintragen' : 'Würfe vorschlagen'}</button>
     ${adm ? `<button class="btn danger" id="undo" ${throwStr(S.pub, pid).length ? '' : 'disabled'}>Letzten gespeicherten Wurf löschen</button>` : ''}`);
   const body = $('#sheetBody'); wireCharts(body);
-  $('#cmpBtn').onclick = () => compareSheet(pid);
+  if ($('#cmpBtn')) $('#cmpBtn').onclick = () => compareSheet(pid);
   $('#nickBtn').onclick = () => can('people') ? personEditSheet(pid) : nickSheet(pid);
   wireGameRows(body, () => profileSheet(pid));
+  if ($('#noteAdd')) $('#noteAdd').onclick = () => guarded(async () => {
+    const x = $('#noteTxt').value.trim().slice(0, 500); if (!x) return;
+    await saveNotes('Interne Notiz', notes => { (notes[pid] ||= []).push({x, by: S.me.name, d: today()}); }); profileSheet(pid);
+  });
+  body.querySelectorAll('[data-ndel]').forEach(b => b.onclick = () => { if (!confirm('Notiz löschen?')) return;
+    guarded(async () => { const i = +b.dataset.ndel; await saveNotes('Interne Notiz gelöscht', notes => { (notes[pid] || []).splice(i, 1); if (notes[pid] && !notes[pid].length) delete notes[pid]; }); profileSheet(pid); }); });
   body.querySelectorAll('.rel [data-pid]').forEach(b => b.onclick = () => profileSheet(b.dataset.pid));
   body.querySelectorAll('[data-tour]').forEach(b => b.onclick = () => { closeSheet(true); S.view = 'tour'; render(); TOUR.open(b.dataset.tour); });
   const tgt = focusThrows ? ($(S.tk === 't' && $('#pThrowsT') ? '#pThrowsT' : '#pThrows')) : focusCat ? document.getElementById('pc_' + focusCat) : null;
