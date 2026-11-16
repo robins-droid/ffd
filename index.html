@@ -329,6 +329,7 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .tvwrap{padding-top:14px;padding-bottom:40px}.tvhead{display:flex;gap:12px;align-items:center}.tvhead img{width:56px;height:56px}
 .tvhead b{display:block;font-size:19px}.tvhead span{display:block;font-size:12.5px;color:var(--muted)}
 body.tview .row.click,body.tview [data-mid]{pointer-events:none}
+.row .pl.tlab{width:auto;min-width:34px;font-size:12.5px;white-space:nowrap;padding-right:4px}
 </style>
 </head>
 <body>
@@ -613,6 +614,31 @@ TE.places = t => {
   return P;
 };
 
+/* Platz-Bezeichnungen, auch live: 1./2., 3./4. (mit Spiel um Platz 3) bzw. HF, dann VF, AF, Gruppe.
+   Ergebnis: {teamId: [Bezeichnung, Rang zum Sortieren]} – nur für Teams, deren Platz schon feststeht. */
+TE.labels = t => {
+  const R = TE.resolve(t), L = {}, ko = (t.matches || []).filter(m => m.stage !== 'g'), done = t.status === 'done', P = done ? TE.places(t) : {};
+  const set = (id, lab, rk) => { if (id && id !== 'BYE' && !(id in L)) L[id] = [lab, P[id] || rk]; };
+  const champ = TE.champion(t), dbl = ko.some(m => m.stage === 'l' || m.stage === 'gf');
+  if (ko.length) {
+    if (champ && champ !== 'BYE') set(champ, '1.', 1);
+    if (R.p3 && R.p3.w && R.p3.l) { set(R.p3.w, '3.', 3); set(R.p3.l, '4.', 4); }
+    if (dbl) {
+      const fin = R.gf2 && !R.gf2.skip ? R.gf2 : R.gf; if (fin && fin.w && fin.l) set(fin.l, '2.', 2);
+      /* Verliererbaum: Bezeichnung nach der Platz-Spanne, die beim Ausscheiden feststeht (3., 4., 5–8 = VF, 9–16 = AF …) */
+      const PL = done ? P : TE.places(t), band = p => p <= 4 ? p + '.' : p <= 8 ? 'VF' : p <= 16 ? 'AF' : p <= 32 ? '1/16' : 'Runde';
+      for (const m of ko.filter(x => x.stage === 'l')) { const r = R[m.id]; if (r && r.w && r.l && !r.skip && PL[r.l]) set(r.l, band(PL[r.l]), PL[r.l]); }
+    } else {
+      const max = Math.max(...ko.filter(x => x.stage === 'w').map(x => x.round));
+      for (const m of ko.filter(x => x.stage === 'w')) { const r = R[m.id]; if (!r || !r.w || !r.l || r.skip || r.auto) continue;
+        const left = max - m.round; set(r.l, left === 0 ? '2.' : left === 1 ? 'HF' : left === 2 ? 'VF' : left === 3 ? 'AF' : 'Runde ' + m.round, 2 ** left + 1); }
+    }
+    if (t.groups && t.groups.length) { const inKO = new Set(); ko.forEach(m => { const r = R[m.id]; if (r) [r.a, r.b].forEach(x => x && inKO.add(x)); });
+      if (inKO.size) for (const g of t.groups) for (const id of g.teams) if (!inKO.has(id)) set(id, 'Gruppe', inKO.size + 1); }
+  } else if (done) for (const [id, p] of Object.entries(P)) set(id, p + '.', p);
+  return L;
+};
+
 /* Spiele eines Turniers für die Statistik (nur echte Ergebnisse, keine Freilose) */
 TE.games = t => { const R = TE.resolve(t); return t.matches.filter(m => { const r = R[m.id]; return r && r.w && !r.auto && !r.skip && r.a !== 'BYE' && r.b !== 'BYE' && m.res; }).map(m => [R[m.id].a, R[m.id].b, R[m.id].w]); };
 
@@ -641,7 +667,7 @@ TE.elo = (summaries, games, W = TE.EW) => {
 
 TE.summary = t => ({id: t.id, name: t.name, d: t.d, sport: t.sport, type: t.type, status: t.status,
   teams: t.teams.map(x => ({id: x.id, name: x.name, players: x.players})), places: t.status === 'done' ? TE.places(t) : undefined,
-  games: t.status !== 'setup' ? TE.games(t) : undefined, champ: t.status === 'done' ? TE.champion(t) : undefined});
+  games: t.status !== 'setup' ? TE.games(t) : undefined, labels: t.status !== 'setup' ? TE.labels(t) : undefined, lv: 2, champ: t.status === 'done' ? TE.champion(t) : undefined});
 
 if (typeof module !== 'undefined') module.exports = TE;
 if (typeof window === 'undefined') { /* Node-Tests */ } else {
@@ -661,7 +687,7 @@ async function tRead(path) {
 async function tLoadIndex() {
   const idx = (await tRead(TIDX)) || emptyIdx();
   /* laufende Turniere aus älteren Ständen haben noch keine Spiele in der Zusammenfassung → einmal frisch berechnen */
-  await Promise.all(idx.list.map(async (x, i) => { if ((x.status === 'groups' || x.status === 'ko') && !x.games) { try { const t = await tRead(TPATH(x.id)); if (t) idx.list[i] = TE.summary(t); } catch {} } }));
+  await Promise.all(idx.list.map(async (x, i) => { if (x.status !== 'setup' && x.lv !== 2) { try { const t = await tRead(TPATH(x.id)); if (t) idx.list[i] = TE.summary(t); } catch {} } }));
   TT.index = idx; return TT.index;
 }
 async function tOpen(id) { busy(true, 'Lade Turnier …'); try { TT.cur = await tRead(TPATH(id)); } finally { busy(false); } if (!TT.cur) return toast('Turnier nicht gefunden'); TT.sub = 'plan'; renderTour(); scrollTo(0, 0); }
@@ -844,10 +870,10 @@ function tBracketHtml(t, R) {
     <h3 class="sect">Finale</h3><div class="bracket">${col(G.filter(m => m.stage === 'gf'), 'Finale')}</div>` : ''}`;
 }
 function tTeamsHtml(t) {
-  const P = t.status === 'done' ? TE.places(t) : null;
-  const list = [...t.teams].sort((a, b) => P ? (P[a.id] || 99) - (P[b.id] || 99) : a.name.localeCompare(b.name, 'de'));
+  const LB = t.status !== 'setup' ? TE.labels(t) : {}, P = Object.keys(LB).length ? Object.fromEntries(Object.entries(LB).map(([k, v]) => [k, v[0]])) : null;
+  const list = [...t.teams].sort((a, b) => ((LB[a.id] || [0, t.status === 'done' ? 999 : 0])[1] - (LB[b.id] || [0, t.status === 'done' ? 999 : 0])[1]) || a.name.localeCompare(b.name, 'de'));
   return `${canT() && t.status === 'setup' ? '<button class="btn pri" id="tAddTeam">＋ Team hinzufügen</button>' : ''}
-    <div class="list" style="margin-top:8px">${list.map(x => `<button class="row click" data-team="${x.id}"><span class="pl">${P ? P[x.id] || '' : ''}</span><span class="nm">${esc(x.name)}${t.cfg.seeding && x.seed ? ' <small style="display:inline">· gesetzt ' + x.seed + '</small>' : ''}<small>${esc(x.players.map(tpn).join(', ') || 'ohne Spielernamen')}</small></span>${canT() && t.status !== 'done' ? '<span>✎</span>' : ''}</button>`).join('') || '<div class="empty">Noch keine Teams</div>'}</div>`;
+    <div class="list" style="margin-top:8px">${list.map(x => `<button class="row click" data-team="${x.id}"><span class="pl tlab">${P ? esc(P[x.id] || '') : ''}</span><span class="nm">${esc(x.name)}${t.cfg.seeding && x.seed ? ' <small style="display:inline">· gesetzt ' + x.seed + '</small>' : ''}<small>${esc(x.players.map(tpn).join(', ') || 'ohne Spielernamen')}</small></span>${canT() && t.status !== 'done' ? '<span>✎</span>' : ''}</button>`).join('') || '<div class="empty">Noch keine Teams</div>'}</div>`;
 }
 
 /* ---------- Neues Turnier / Vorlagen ---------- */
@@ -1218,13 +1244,14 @@ function tProfileHtml(pid) {
   const E = eloData()[pid];
   if (!mine.length && !E) return '';
   const real = mine.filter(x => x.s.type === 'real'), test = mine.filter(x => x.s.type !== 'real');
-  const best = l => l.length ? Math.min(...l.map(x => x.place || 99)) : null, titles = l => l.filter(x => x.place === 1).length;
+  const lab = x => ((x.s.labels || {})[x.tm.id]) || (x.place ? [x.place + '.', x.place] : null);
+  const best = l => { const b = l.map(lab).filter(Boolean).sort((a, b) => a[1] - b[1])[0]; return b ? b[0] : null; }, titles = l => l.filter(x => x.place === 1).length;
   const all = Object.entries(eloData()).filter(([p]) => S.pub.people[p]).sort((a, b) => b[1].r - a[1].r), rk = all.findIndex(([p]) => p === pid) + 1;
   return `<div class="card"><div class="statinfo"><div><b>🏆 Turniere (Flunkyball)</b><br><span>${real.length} Turniere · ${test.length} Testturniere</span></div>
     ${E ? `<div style="text-align:right"><span>Elo${rk ? ' · Platz ' + rk : ''}</span><br><b style="color:var(--gold2);font-size:20px">${Math.round(E.r)}</b></div>` : ''}</div>
-    <div class="bigstat"><div><b>${titles(real)}</b><span>Titel</span></div><div><b>${best(real) ? best(real) + '.' : '–'}</b><span>Beste Platz.</span></div><div><b>${E ? E.w + ':' + E.l : '–'}</b><span>Siege:Nied.</span></div></div>
+    <div class="bigstat"><div><b>${titles(real)}</b><span>Titel</span></div><div><b>${best(real) || '–'}</b><span>Beste Platz.</span></div><div><b>${E ? E.w + ':' + E.l : '–'}</b><span>Siege:Nied.</span></div></div>
     ${E && E.hist.length >= 2 ? lineChart(E.hist.map(h => ({y: h.r, label: fmtD(h.d)})), {fmt: v => Math.round(v) + ''}) : ''}
-    <div class="att">${mine.sort((a, b) => (b.s.d || '').localeCompare(a.s.d || '')).map(x => `<button class="click" data-tour="${x.s.id}"><span>${fmtD(x.s.d)}</span><span class="pn">${esc(x.s.name)}${x.s.type === 'real' ? '' : ' · Test'} · ${esc(x.tm.name)}</span><b>${x.s.status !== 'done' ? '<small style="font-weight:600;color:var(--gold2)">läuft</small>' : x.place ? x.place + '.' : '–'}</b></button>`).join('')}</div></div>`;
+    <div class="att">${mine.sort((a, b) => (b.s.d || '').localeCompare(a.s.d || '')).map(x => `<button class="click" data-tour="${x.s.id}"><span>${fmtD(x.s.d)}</span><span class="pn">${esc(x.s.name)}${x.s.type === 'real' ? '' : ' · Test'} · ${esc(x.tm.name)}</span><b>${lab(x) ? esc(lab(x)[0]) : x.s.status !== 'done' ? '<small style="font-weight:600;color:var(--gold2)">läuft</small>' : '–'}</b></button>`).join('')}</div></div>`;
 }
 
 /* ---------- Teilen: CSV und Bild ---------- */
