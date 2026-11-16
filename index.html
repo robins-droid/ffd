@@ -334,6 +334,9 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 #infoPop.on{display:flex}#infoPop .ibox{position:relative;background:var(--card,#2a1a2e);border:1px solid var(--line,#4a3550);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:80vh;overflow:auto;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}
 #infoPop h3{margin:0 40px 10px 0;font-size:18px;color:var(--gold2)}#infoPop .itext p{margin:0 0 9px;line-height:1.45;font-size:14.5px}#infoPop .xbtn{position:absolute;top:10px;right:10px}
 .itip{color:var(--gold2);opacity:.85}
+.linkbtn{display:block;background:none;border:0;padding:4px 0;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:left}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--gold2);color:var(--gold2)!important;text-decoration:none;font-weight:700;font-size:15px;margin:6px 8px 0 0;vertical-align:middle}
+.ihint{font-size:12.5px;color:var(--muted);vertical-align:middle}
 </style>
 </head>
 <body>
@@ -367,7 +370,6 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
     <div id="eloBox" class="hidden"></div>
     <div id="sumBox">
     <h3 class="sect">Gesamtwertung</h3>
-    <p class="hint" style="margin:-4px 2px 10px">Summe = Ex-Prozente (schnellste Zeit = 100 %) + Wurf-Wert (Statistik-Prozente × 2)<br><span class="itip">ⓘ Lange drücken oder doppelt tippen – auf Schalter, Überschriften und Zahlen – erklärt die Berechnung.</span></p>
     <div class="ctl"><label>Wurf-Wert</label><div class="seg" id="gwMode"><button data-v="avg">Ø × 2</button><button data-v="max">Max × 2</button><button data-v="rel">Verlässlich × 2</button></div></div>
     <div class="ctl"><label>Zeitraum</label><div class="seg" id="gwPer"><button data-v="all">Gesamt</button><button data-v="year">Jahr</button><button data-v="tour">Ab Turnier / Datum</button></div></div>
     <div class="ctl hidden" id="gwYearC"><label>Jahr</label><select class="inp" id="gwYear" style="flex:1"></select></div>
@@ -2216,8 +2218,11 @@ function renderAll() {
   const lt = lastTour();
   const sd = S.gw.per === 'tour' ? sinceDate() : null;
   const o = overall();
-  $('#gwInfo').innerHTML = (o.fastest ? `100 % = ${fmtT(o.fastest)}` : 'Noch keine Zeiten im Zeitraum') + (S.gw.per === 'tour' ? (sd ? ` · Wertung ab ${fmtD(sd)}` : ' · Bitte Datum wählen') : '')
-    + (can('tdates') ? ' · <a href="#" id="tourLink" style="color:var(--gold2)">Turniere verwalten</a>' : '');
+ const extra = [o.fastest ? '' : 'Noch keine Zeiten im Zeitraum', S.gw.per === 'tour' ? (sd ? `Wertung ab ${fmtD(sd)}` : 'Bitte Datum wählen') : '',
+    can('tdates') ? '<a href="#" id="tourLink" style="color:var(--gold2)">Turniere verwalten</a>' : ''].filter(Boolean).join(' · ');
+  S.gwFast = o.fastest;
+  $('#gwInfo').innerHTML = (extra ? extra + '<br>' : '') + '<a href="#" id="gwHelp" class="ibtn" aria-label="Infos zur Berechnung">ⓘ</a><span class="ihint">Doppelt tippen auf Schalter & Zahlen erklärt sie</span>';
+  $('#gwHelp').onclick = e => { e.preventDefault(); showInfo('gw'); };
   if ($('#tourLink')) $('#tourLink').onclick = e => { e.preventDefault(); tournamentsSheet(); };
   let place = 0;
   const q = ($('#gq').value || '').trim().toLowerCase();
@@ -2627,6 +2632,7 @@ $('#hqRes').onclick = e => { const b = e.target.closest('[data-pid]'); if (b) { 
 $('#konsBtn').onclick = () => konsSheet();
 $('#tmSeg').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { S.tm = b.dataset.v; renderThrows(); } };
 $('#relInfo').onclick = () => showInfo('throws');
+
 $('#tabHome').onclick = () => { S.view = 'home'; render(); scrollTo(0, 0); };
 $('#homeRules').onclick = () => rulesSheet();
 $('#tabTour').onclick = () => { S.view = 'tour'; render(); scrollTo(0, 0); };
@@ -2676,7 +2682,7 @@ const INFO = {
   gw: ['🏅 Gesamtwertung', () => `<p><b>Summe = Ex-Prozente + Wurf-Wert</b></p>
     <p><b>Ex-Prozente:</b> Deine beste gültige Ex-Zeit in der gewählten Kategorie und im Zeitraum im Vergleich zur schnellsten: schnellste Zeit ÷ deine Zeit × 100. Die schnellste Person hat 100 %.</p>
     <p><b>Wurf-Wert:</b> Deine Trainings-Wurfstatistiken (je ${S.pub.settings.statSize} Würfe, ab ${minTeam()}er-Teams) × 2 – je nach Auswahl Durchschnitt, beste oder verlässlicher Wert.</p>
-    <p>Beispiel: 80 % Ex + Ø 35 % Würfe → 80 + 70 = <b>150</b>.</p>
+    <p>Beispiel: 80 % Ex + Ø 35 % Würfe → 80 + 70 = <b>150</b>.</p>${S.gwFast ? `<p>Aktuell: <b>100 % = ${fmtT(S.gwFast)}</b></p>` : ''}
     <p>Gewertet wird nur, wer im Zeitraum mindestens eine volle Statistik <i>und</i> eine Ex-Zeit hat. Gleiche Summe = gleicher Platz.</p>`],
   gwMode: ['Wurf-Wert', () => `<p><b>Ø × 2:</b> Durchschnitt aller vollen Statistiken.</p><p><b>Max × 2:</b> deine beste einzelne Statistik.</p>
     <p><b>Verlässlich × 2:</b> Ø − ½ Standardabweichung – wer konstant trifft, wird belohnt, starke Schwankungen kosten Punkte (Standardabweichung erst ab 3 Statistiken).</p>`],
