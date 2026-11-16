@@ -326,6 +326,9 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .game .ghd{display:flex;align-items:center;gap:8px;padding-right:44px}.game .ghd h2{flex:1;margin-bottom:0}
 .game .gcfg{font-size:20px;padding:6px 12px}.game .gcfg.on{border-color:var(--gold);background:rgba(245,197,24,.15)}
 .game .gsum{margin:2px 0 6px;font-weight:600}
+.tvwrap{padding-top:14px;padding-bottom:40px}.tvhead{display:flex;gap:12px;align-items:center}.tvhead img{width:56px;height:56px}
+.tvhead b{display:block;font-size:19px}.tvhead span{display:block;font-size:12.5px;color:var(--muted)}
+body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 </style>
 </head>
 <body>
@@ -661,7 +664,7 @@ const tName = (t, id) => id === 'BYE' ? 'Freilos' : ((t.teams.find(x => x.id ===
 const tpn = p => String(p).startsWith('g:') ? p.slice(2) + ' (Gast)' : nameOf(p);
 const tPlayers = (t, id) => ((t.teams.find(x => x.id === id) || {}).players || []).map(tpn).join(', ');
 const canT = () => can('tour');
-const canRes = () => can('tour') || can('direct');
+const canRes = () => can('tour') || can('direct') || can('tres');
 
 /* Speichern eines Turniers (mit Rückgängig-Schnappschuss, Verlauf und Index-Zusammenfassung) */
 async function tSave(msg, fn, {snap = true, log, ok} = {}) {
@@ -740,6 +743,7 @@ function tActions(t) {
   if (t.status === 'done') a.push(['reopen', '↺ Wieder öffnen']);
   if ((t.hist || []).length && t.status !== 'done') a.push(['undo', '↶ Rückgängig']);
   a.push(['cfg', t.status === 'done' ? '⚙️ Einstellungen' : '⚙️ Modus & Einstellungen']);
+  a.push(['view', t.tv ? '📱 Zuschauer-QR' : '📱 Zuschauer-Zugang & QR']);
   a.push(['tpl', '💾 Format als Vorlage']);
   if (isAdmin()) a.push(['delete', '🗑 Löschen']);
   return a.map(([k, n]) => `<button class="chip" data-act="${k}">${n}</button>`).join('');
@@ -747,6 +751,7 @@ function tActions(t) {
 async function tAct(k) {
   const t = TT.cur;
   if (k === 'addteam') return tTeamSheet(null);
+  if (k === 'view') return tViewSheet();
   if (k === 'randteams') return tRandomTeamsSheet();
   if (k === 'drawgroups') return tDrawGroupsSheet();
   if (k === 'drawko') return tQualifierSheet();
@@ -766,6 +771,7 @@ async function tAct(k) {
       await save('Turnier gelöscht: ' + t.name, ctx => {
         const idx = ctx.x[TIDX] || emptyIdx(); idx.list = idx.list.filter(x => x.id !== t.id); ctx.x[TIDX] = idx; ctx.xw.add(TIDX);
         ctx.pub.tournaments = (ctx.pub.tournaments || []).filter(x => x.id !== t.id);
+        if (t.tv) (ctx.tvDel ||= []).push(TVPATH(t.id));
         ctx.after = async () => { TT.index = idx; TT.cur = null; };
       }, {files: [TIDX], okText: 'Gelöscht ✓'});
       renderTour();
@@ -799,7 +805,9 @@ function tPlanHtml(t, R) {
     <h3 class="sect">Als Nächstes</h3>${next.map(m => tMatchHtml(t, m, R)).join('') || '<div class="empty">Keine offenen Spiele</div>'}
     <h3 class="sect">Gespielt</h3>${done.map(m => tMatchHtml(t, m, R)).join('') || '<div class="empty">Noch keine Ergebnisse</div>'}`;
 }
-const tPrio = (a, b) => ({g: 0, w: 1, l: 1, p3: 2, gf: 3}[a.stage] - {g: 0, w: 1, l: 1, p3: 2, gf: 3}[b.stage]) || a.round - b.round || (a.stage === 'w' ? -1 : 1) * (a.stage !== b.stage) || a.id.localeCompare(b.id);
+/* Reihenfolge: Gruppenspiele rundenweise und innerhalb der Runde abwechselnd zwischen den Gruppen (A1, B1, C1, A2, B2 …) */
+const tSlot = m => m.stage === 'g' ? +(String(m.id).split('_')[1] || 0) : 0;
+const tPrio = (a, b) => ({g: 0, w: 1, l: 1, p3: 2, gf: 3}[a.stage] - {g: 0, w: 1, l: 1, p3: 2, gf: 3}[b.stage]) || a.round - b.round || tSlot(a) - tSlot(b) || (a.stage === 'w' ? -1 : 1) * (a.stage !== b.stage) || String(a.group || '').localeCompare(String(b.group || '')) || a.id.localeCompare(b.id);
 function tAutoFields(t) {
   const F = t.cfg.fields || 1, R = TE.resolve(t), pl = TE.playable(t, R).sort(tPrio);
   t.matches.forEach(m => { if (m.f && !pl.includes(m)) delete m.f; });
@@ -1303,6 +1311,152 @@ function beamerRender(t) {
     <div class="bmgrid"><div><h2>Auf den Feldern</h2>${onF.map(mm).join('') || '<p>–</p>'}<h2>Als Nächstes</h2>${next.map(mm).join('') || '<p>–</p>'}</div><div>${right}</div></div></div>`;
 }
 
+/* ---------- QR-Code (Byte-Modus, Fehlerkorrektur M) ---------- */
+const QR = (() => {
+  const ECW = [-1, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
+  const NB = [-1, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
+  const rawMods = v => { let r = (16 * v + 128) * v + 64; if (v >= 2) { const na = Math.floor(v / 7) + 2; r -= (25 * na - 10) * na - 55; if (v >= 7) r -= 36; } return r; };
+  const dataCw = v => Math.floor(rawMods(v) / 8) - ECW[v] * NB[v];
+  const mul = (x, y) => { let z = 0; for (let i = 7; i >= 0; i--) { z = (z << 1) ^ ((z >>> 7) * 0x11D); z ^= ((y >>> i) & 1) * x; } return z & 255; };
+  const divisor = d => { const r = new Array(d).fill(0); r[d - 1] = 1; let root = 1; for (let i = 0; i < d; i++) { for (let j = 0; j < d; j++) { r[j] = mul(r[j], root); if (j + 1 < d) r[j] ^= r[j + 1]; } root = mul(root, 2); } return r; };
+  const rem = (data, dv) => { const r = dv.map(() => 0); for (const b of data) { const f = b ^ r.shift(); r.push(0); dv.forEach((c, i) => r[i] ^= mul(c, f)); } return r; };
+  const alignPos = v => { if (v === 1) return []; const n = Math.floor(v / 7) + 2, size = v * 4 + 17, step = v === 32 ? 26 : Math.ceil((v * 4 + 4) / (n * 2 - 2)) * 2, r = [6]; for (let p = size - 7; r.length < n; p -= step) r.splice(1, 0, p); return r; };
+  function make(text) {
+    const bytes = [...new TextEncoder().encode(text)];
+    let v = 1; for (; v <= 40; v++) if (4 + (v < 10 ? 8 : 16) + bytes.length * 8 <= dataCw(v) * 8) break;
+    if (v > 40) throw new Error('Text zu lang für QR-Code');
+    const bits = [], ap = (x, n) => { for (let i = n - 1; i >= 0; i--) bits.push((x >>> i) & 1); };
+    ap(4, 4); ap(bytes.length, v < 10 ? 8 : 16); bytes.forEach(b => ap(b, 8));
+    const cap = dataCw(v) * 8; ap(0, Math.min(4, cap - bits.length)); ap(0, (8 - bits.length % 8) % 8);
+    for (let p = 0xEC; bits.length < cap; p ^= 0xEC ^ 0x11) ap(p, 8);
+    const data = []; for (let i = 0; i < bits.length; i += 8) { let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j]; data.push(b); }
+    const nb = NB[v], ec = ECW[v], raw = Math.floor(rawMods(v) / 8), nShort = nb - raw % nb, shortLen = Math.floor(raw / nb), dv = divisor(ec), blocks = [];
+    for (let i = 0, k = 0; i < nb; i++) { const d = data.slice(k, k + shortLen - ec + (i < nShort ? 0 : 1)); k += d.length; const e = rem(d, dv); if (i < nShort) d.push(0); blocks.push(d.concat(e)); }
+    const cw = []; for (let i = 0; i < blocks[0].length; i++) blocks.forEach((b, j) => { if (i !== shortLen - ec || j >= nShort) cw.push(b[i]); });
+    const size = v * 4 + 17, M = [...Array(size)].map(() => Array(size).fill(false)), F = [...Array(size)].map(() => Array(size).fill(false));
+    const set = (x, y, on) => { M[y][x] = on; F[y][x] = true; };
+    for (let i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+    const finder = (cx, cy) => { for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const d = Math.max(Math.abs(dx), Math.abs(dy)), x = cx + dx, y = cy + dy; if (x >= 0 && x < size && y >= 0 && y < size) set(x, y, d !== 2 && d !== 4); } };
+    finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
+    const al = alignPos(v), na = al.length;
+    for (let i = 0; i < na; i++) for (let j = 0; j < na; j++) { if ((i === 0 && j === 0) || (i === 0 && j === na - 1) || (i === na - 1 && j === 0)) continue; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) set(al[i] + dx, al[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1); }
+    const fmt = mask => { const d = (0 << 3) | mask; let r = d; for (let i = 0; i < 10; i++) r = (r << 1) ^ ((r >>> 9) * 0x537); const b = ((d << 10) | r) ^ 0x5412, bit = i => ((b >>> i) & 1) !== 0;
+      for (let i = 0; i <= 5; i++) set(8, i, bit(i)); set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8)); for (let i = 9; i < 15; i++) set(14 - i, 8, bit(i));
+      for (let i = 0; i < 8; i++) set(size - 1 - i, 8, bit(i)); for (let i = 8; i < 15; i++) set(8, size - 15 + i, bit(i)); set(8, size - 8, true); };
+    fmt(0);
+    if (v >= 7) { let r = v; for (let i = 0; i < 12; i++) r = (r << 1) ^ ((r >>> 11) * 0x1F25); const b = (v << 12) | r; for (let i = 0; i < 18; i++) { const on = ((b >>> i) & 1) !== 0, a = size - 11 + i % 3, c = Math.floor(i / 3); set(a, c, on); set(c, a, on); } }
+    let k = 0;
+    for (let right = size - 1; right >= 1; right -= 2) { if (right === 6) right = 5; for (let vert = 0; vert < size; vert++) for (let j = 0; j < 2; j++) { const x = right - j, up = ((right + 1) & 2) === 0, y = up ? size - 1 - vert : vert; if (!F[y][x] && k < cw.length * 8) { M[y][x] = ((cw[k >>> 3] >>> (7 - (k & 7))) & 1) !== 0; k++; } } }
+    const cond = [(x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, x => x % 3 === 0, (x, y) => (x + y) % 3 === 0, (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => x * y % 2 + x * y % 3 === 0, (x, y) => (x * y % 2 + x * y % 3) % 2 === 0, (x, y) => ((x + y) % 2 + x * y % 3) % 2 === 0];
+    const applyMask = m => { for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (!F[y][x] && cond[m](x, y)) M[y][x] = !M[y][x]; };
+    const penalty = () => { let p = 0, dark = 0;
+      for (let y = 0; y < size; y++) for (const hz of [true, false]) { let run = 0, last = null; for (let x = 0; x < size; x++) { const c = hz ? M[y][x] : M[x][y]; if (c === last) { run++; if (run === 5) p += 3; else if (run > 5) p++; } else { run = 1; last = c; } } }
+      for (let y = 0; y < size - 1; y++) for (let x = 0; x < size - 1; x++) { const c = M[y][x]; if (c === M[y][x + 1] && c === M[y + 1][x] && c === M[y + 1][x + 1]) p += 3; }
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (M[y][x]) dark++;
+      return p + Math.floor(Math.abs(dark * 20 - size * size * 10) / (size * size)) * 10; };
+    let best = 0, bestP = Infinity;
+    for (let m = 0; m < 8; m++) { applyMask(m); fmt(m); const p = penalty(); if (p < bestP) { bestP = p; best = m; } applyMask(m); }
+    applyMask(best); fmt(best);
+    return {size, mask: best, get: (x, y) => M[y][x]};
+  }
+  function canvas(text, scale = 8, border = 4) {
+    const q = make(text), n = q.size + border * 2, c = document.createElement('canvas'); c.width = c.height = n * scale;
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.fillStyle = '#000';
+    for (let y = 0; y < q.size; y++) for (let x = 0; x < q.size; x++) if (q.get(x, y)) g.fillRect((x + border) * scale, (y + border) * scale, scale, scale);
+    return c;
+  }
+  return {make, canvas};
+})();
+
+/* ---------- Zuschauer-Zugang: eigenes Passwort je Turnier, nur ansehen ---------- */
+const TVPATH = id => 'data/turniere/' + id + '.view.json';
+const b64u = s => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const unb64u = s => unb64(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+const tvLink = (id, kb64) => location.origin + location.pathname.replace(/index\.html$/, '') + '#tv=' + id + '&vk=' + b64u(kb64);
+/* Beim Speichern: für jedes geänderte Turnier mit Zuschauer-Zugang die Zuschauer-Datei neu verschlüsseln */
+async function tViewFiles(ctx) {
+  const out = [];
+  for (const pth of [...ctx.xw]) {
+    const m = pth.match(/^data\/turniere\/(u[0-9a-f]{10})\.json$/); if (!m) continue;
+    const t = ctx.x[pth]; if (!t || !t.tv) continue;
+    const pids = new Set(t.teams.flatMap(x => x.players || []).filter(p => ctx.pub.people[p]));
+    const names = Object.fromEntries([...pids].map(p => [p, ctx.pub.people[p].n || ctx.pub.people[p].s || '?']));
+    const {hist, log, tv, ...slim} = t;
+    const K = await importK(unb64(t.tv.k));
+    out.push({path: TVPATH(t.id), content: JSON.stringify({ffdview: 1, salt: t.tv.salt, iter: t.tv.iter, ...(await aesEnc(K, enc.encode(JSON.stringify({t: slim, names, at: new Date().toISOString()}))))}) + '\n'});
+  }
+  for (const pth of ctx.tvDel || []) out.push({path: pth, del: true});
+  return out;
+}
+function tViewSheet() {
+  const t = TT.cur, tv = t.tv;
+  openSheet(`<h2>📱 Zuschauer-Zugang</h2><p class="sub">Eigenes Passwort nur für <b>${esc(t.name)}</b>: Wer es hat (oder den QR-Code scannt), sieht nur dieses Turnier – Spielplan, Gruppen, K.-o. und Teams (mit Kurznamen) – und kann nichts eintragen.</p>
+    ${S.lock ? '' : '<p class="hint" style="color:var(--gold2)">Hinweis: Ohne Seiten-Passwort sind die Daten ohnehin öffentlich lesbar.</p>'}
+    ${tv ? `<div class="card" style="text-align:center"><div id="qrBox"></div>
+        <p style="margin:8px 0 2px">Passwort: <b style="font-size:18px">${esc(tv.pw)}</b></p>
+        <p class="hint" style="margin:0">Der QR-Code enthält das Passwort – Scannen öffnet direkt die Turnierseite.</p></div>
+      <div class="tacts"><button class="chip" id="qrDl">⬇️ QR als Bild</button><button class="chip" id="qrCp">🔗 Link kopieren</button>${navigator.share ? '<button class="chip" id="qrSh">📤 Teilen</button>' : ''}</div>
+      <p class="hint">Ohne QR: <b>${esc(location.origin + location.pathname.replace(/index\.html$/, ''))}#tv=${t.id}</b> öffnen und das Passwort eingeben.</p>
+      <h3 class="sect">Passwort ändern</h3><p class="hint" style="margin-top:0">Alte QR-Codes und das alte Passwort funktionieren danach nicht mehr.</p>` : ''}
+    <div class="field"><label>${tv ? 'Neues' : ''} Turnier-Passwort</label><input class="inp" id="tvpw" placeholder="z. B. sommer26" autocomplete="off"></div>
+    <div class="err" id="err"></div><button class="btn pri" id="go">${tv ? 'Passwort ändern' : 'Zuschauer-Zugang erstellen'}</button>
+    ${tv ? '<button class="btn danger" id="off">Zuschauer-Zugang entfernen</button>' : ''}`);
+  if (tv) {
+    let link, c; try { link = tvLink(t.id, tv.k); c = QR.canvas(link, 7); } catch (e) { $('#qrBox').textContent = 'QR-Fehler: ' + e.message; return; } c.style.cssText = 'width:100%;max-width:260px;border-radius:10px'; $('#qrBox').appendChild(c);
+    $('#qrDl').onclick = () => c.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'QR-' + t.name.replace(/[^\wäöüÄÖÜß-]+/g, '_') + '.png'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); });
+    $('#qrCp').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Link kopiert ✓'); } catch { prompt('Link kopieren:', link); } };
+    if ($('#qrSh')) $('#qrSh').onclick = () => navigator.share({title: t.name, url: link}).catch(() => {});
+  }
+  $('#go').onclick = () => guarded(async () => {
+    const pw = $('#tvpw').value.trim(); if (pw.length < 4) throw new Error('Bitte mindestens 4 Zeichen.');
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iter = 150000, raw = await siteRaw(pw, salt, iter);
+    await tSave(tv ? 'Zuschauer-Passwort geändert' : 'Zuschauer-Zugang erstellt', tt => { tt.tv = {pw, salt: b64(salt), iter, k: b64(raw)}; }, {snap: false, ok: 'Gespeichert ✓ QR-Code bereit'});
+    tViewSheet();
+  }, $('#err'));
+  if ($('#off')) $('#off').onclick = () => guarded(async () => {
+    if (!confirm('Zuschauer-Zugang entfernen? Passwort und QR-Codes funktionieren dann nicht mehr.')) return;
+    await tSave('Zuschauer-Zugang entfernt', (tt, ctx) => { delete tt.tv; (ctx.tvDel ||= []).push(TVPATH(tt.id)); }, {snap: false, ok: 'Entfernt ✓'});
+    tViewSheet();
+  }, $('#err'));
+}
+/* Zuschauer-Seite (#tv=<id>) */
+async function tViewStart() {
+  document.body.classList.add('tview');
+  const id = (location.hash.match(/tv=(u[0-9a-f]{10})/) || [])[1], hk = (location.hash.match(/[&#]vk=([\w-]+)/) || [])[1];
+  const LS = 'ffd_tv_' + id;
+  const W = html => { document.body.innerHTML = `<div class="wrap tvwrap">${html}</div>`; };
+  if (!id) return W('<div class="empty" style="margin-top:40px">Ungültiger Link.</div>');
+  const fetchV = async () => { const r = await fetch(TVPATH(id) + '?t=' + Date.now(), {cache: 'no-store'}); if (!r.ok) return null; return r.json(); };
+  let V; try { V = await fetchV(); } catch {}
+  if (!V || !V.ffdview) return W('<div class="empty" style="margin-top:40px">Für dieses Turnier gibt es (nicht mehr) keinen Zuschauer-Zugang.</div>');
+  const tryKey = async raw => { try { const K = await importK(raw); return {raw, d: JSON.parse(dec.decode(await aesDec(K, V)))}; } catch { return null; } };
+  let got = null;
+  if (hk) { got = await tryKey(unb64u(hk)); if (got) { try { localStorage.setItem(LS, hk); } catch {} history.replaceState(null, '', location.pathname + '#tv=' + id); } }
+  if (!got) { const st = (() => { try { return localStorage.getItem(LS); } catch { return null; } })(); if (st) got = await tryKey(unb64u(st)); }
+  if (!got) got = await new Promise(res => {
+    W(`<div class="lockin" style="margin:60px auto 0"><img src="icons/logo-400.png" alt=""><h1>Turnier ansehen</h1><p>Bitte das Turnier-Passwort eingeben.</p>
+      <input class="inp" id="tvp" type="password" placeholder="Turnier-Passwort"><div class="err" id="tve"></div><button class="btn pri" id="tvg">Öffnen</button></div>`);
+    const go = async () => { const pw = $('#tvp').value; if (!pw) return; $('#tvg').disabled = true;
+      const raw = await siteRaw(pw, unb64(V.salt), V.iter), r = await tryKey(raw); $('#tvg').disabled = false;
+      if (!r) { $('#tve').textContent = 'Falsches Passwort.'; return; } try { localStorage.setItem(LS, b64u(b64(raw))); } catch {} res(r); };
+    $('#tvg').onclick = go; $('#tvp').onkeydown = e => { if (e.key === 'Enter') go(); };
+  });
+  let sub = 'plan', data = got.d;
+  const draw = () => {
+    const t = data.t, R = TE.resolve(t), champ = TE.champion(t);
+    S.pub = {people: Object.fromEntries(Object.entries(data.names).map(([p, n]) => [p, {s: n}])), settings: {}, games: []}; S.names = null;
+    const subs = [['plan', 'Spielplan'], ...(t.groups && t.groups.length ? [['groups', 'Gruppen']] : []), ...(t.matches.some(m => m.stage !== 'g') ? [['ko', 'K.-o.']] : []), ['teams', 'Teams']];
+    if (!subs.some(x => x[0] === sub)) sub = 'plan';
+    W(`<div class="tvhead"><img src="icons/logo-400.png" alt=""><div><b>${esc(t.name)}</b><span>${fmtD(t.d)} · ${SPORT[t.sport] || ''} · ${STATUS[t.status] || ''}</span><span>aktualisiert ${new Date(data.at).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})} · lädt automatisch neu</span></div></div>
+      ${champ && champ !== 'BYE' ? `<div class="rec" style="margin-top:8px">🏆 Sieger: <b>${esc(tName(t, champ))}</b></div>` : ''}
+      <div class="seg" id="tvSub" style="margin:10px 0">${subs.map(([k, n]) => `<button data-v="${k}" class="${sub === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+      <div id="tvBody">${sub === 'plan' ? tPlanHtml(t, R) : sub === 'groups' ? t.groups.map(g => tGroupHtml(t, g, R)).join('') : sub === 'ko' ? tBracketHtml(t, R) : tTeamsHtml(t)}</div>`);
+    $('#tvSub').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { sub = b.dataset.v; draw(); } };
+  };
+  draw();
+  setInterval(async () => { try { const v2 = await fetchV(); if (!v2 || !v2.ffdview) return; V = v2; const r = await tryKey(got.raw); if (r) { data = r.d; const y = scrollY; draw(); scrollTo(0, y); } } catch {} }, 60000);
+}
+
 /* ---------- Einbindung in die App ---------- */
 /* Beschriftung einer Turnierpartie für den Spielmodus */
 function tMatchLabel(tm) {
@@ -1379,7 +1533,7 @@ function tRandomTeamsSheet() {
   draw();
 }
 
-window.TOUR = {renderTour, tLoadIndex, tProfileHtml, beamerStart, open: tOpen, oldTeams: tOldTeams, index: () => TT.index, matchLabel: tMatchLabel, resultInCtx: tResultInCtx, elo: eloData, renderElo};
+window.TOUR = {viewFiles: tViewFiles, viewStart: tViewStart, QR, renderTour, tLoadIndex, tProfileHtml, beamerStart, open: tOpen, oldTeams: tOldTeams, index: () => TT.index, matchLabel: tMatchLabel, resultInCtx: tResultInCtx, elo: eloData, renderElo};
 }
 
 </script>
@@ -1424,7 +1578,7 @@ const isAdmin = () => S.role === 'admin';
 /* Rechte der Freigeber (vom Admin pro Person wählbar; ohne Auswahl = alles) */
 const PERMS = [['approve', '📥 Vorschläge freigeben'], ['direct', '✍️ Direkt eintragen (Zeiten, Würfe, Kommentare, Spiele)'], ['names', '👁 Volle Namen sehen'],
   ['people', '👥 Personen & Spitznamen bearbeiten'], ['cats', '🍺 Kategorien verwalten'], ['stat', '📏 Statistik-Länge & Mindest-Teamgröße ändern'],
-  ['tdates', '📅 Turnierdaten für die Gesamtwertung'], ['tour', '🏆 Turniere erstellen & leiten'], ['csv', '⬇️ CSV herunterladen'], ['share', '📤 Turniere als Bild/CSV teilen'], ['delete', '🗑 Einträge bearbeiten & löschen (Ex-Zeiten, Würfe, Kommentare, Spiele)'], ['notes', '🔒 Interne Notizen zu Personen sehen & schreiben']];
+  ['tdates', '📅 Turnierdaten für die Gesamtwertung'], ['tour', '🏆 Turniere erstellen & leiten'], ['tres', '🏁 Nur Turnier-Ergebnisse eintragen (Schiri)'], ['csv', '⬇️ CSV herunterladen'], ['share', '📤 Turniere als Bild/CSV teilen'], ['delete', '🗑 Einträge bearbeiten & löschen (Ex-Zeiten, Würfe, Kommentare, Spiele)'], ['notes', '🔒 Interne Notizen zu Personen sehen & schreiben']];
 const can = k => S.role === 'admin' || (S.role === 'editor' && (!Array.isArray(S.perm) || S.perm.includes(k)));
 const canDirect = () => can('direct');
 const median = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
@@ -1712,6 +1866,7 @@ async function save(message, mutate, {busyText = 'Speichere …', quiet = false,
       const files = [{path: 'data/public.json', content: await sealJ(pub, KW) + '\n'}];
       if (outSecret !== secFile) files.push({path: 'data/secret.json', content: JSON.stringify(outSecret, null, 1) + '\n'});
       for (const pth of ctx.xw) files.push({path: pth, content: await sealJ(ctx.x[pth], KW) + '\n'});
+      if (window.TOUR && TOUR.viewFiles) for (const f of await TOUR.viewFiles(ctx)) files.push(f);
       if (ctx.lockFile !== undefined) files.push({path: LOCKP, del: !ctx.lockFile, content: ctx.lockFile ? JSON.stringify(ctx.lockFile, null, 1) + '\n' : ''});
       const tree = await gh('git/trees', {method: 'POST', body: {base_tree: commit.tree.sha, tree: files.map(f => f.del ? {path: f.path, mode: '100644', type: 'blob', sha: null} : {path: f.path, mode: '100644', type: 'blob', content: f.content})}});
       const nc = await gh('git/commits', {method: 'POST', body: {message, tree: tree.sha, parents: [headSha]}});
@@ -4209,6 +4364,7 @@ function sitePwSheet() {
 }
 
 async function start() {
+  if (/^#tv=/.test(location.hash) && window.TOUR) return TOUR.viewStart();
   await unlockSite();
   if (/^#beamer/.test(location.hash) && window.TOUR) { try { S.pub = await fetchJSON('data/public.json'); S.repo = guessRepo(); } catch {} return TOUR.beamerStart(); }
   try { S.pub = await fetchJSON('data/public.json'); if (!S.pub) throw new Error(); }
