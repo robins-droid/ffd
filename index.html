@@ -2632,12 +2632,21 @@ $('#statSizeBtn').onclick = () => statSizeSheet();
 window.addEventListener('beforeunload', e => { if (localCount()) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- Login & Menü ---------- */
+/* Vereins-Passwort auf diesem Gerät vergessen (und ggf. abmelden) */
+function siteLockOut() {
+  if (localCount() && !confirm('Es gibt ungespeicherte Würfe. Trotzdem sperren?')) return;
+  if (!confirm('Seite auf diesem Gerät sperren? Danach muss das Vereins-Passwort neu eingegeben werden.')) return;
+  try { localStorage.removeItem('ffd_site'); localStorage.removeItem('ffd_auth'); } catch {}
+  location.replace(location.pathname);
+}
 function loginSheet() {
   openSheet(`<h2>Anmelden</h2><p class="sub">Für Admin und Freigeber. Zum Vorschlagen von Zeiten und Würfen brauchst du kein Passwort – einfach unten auf den gelben Knopf.</p>
     <div class="field"><label>Passwort</label><input class="inp" type="password" id="pw" autocomplete="current-password"></div>
     <label class="check"><input type="checkbox" id="rem"> Auf diesem Gerät angemeldet bleiben</label>
     <div class="err" id="err"></div><button class="btn pri" id="go">Anmelden</button>
-    <button class="btn ghost hidden" id="setup">Ersteinrichtung starten</button>`);
+    <button class="btn ghost hidden" id="setup">Ersteinrichtung starten</button>
+    ${S.lock ? '<button class="btn ghost" id="siteOut">🔒 Seite auf diesem Gerät sperren</button>' : ''}`);
+  if ($('#siteOut')) $('#siteOut').onclick = siteLockOut;
   const pw = $('#pw'); setTimeout(() => pw.focus(), 250);
   fetchJSON('data/secret.json').then(s => { if (!s) { $('#setup').classList.remove('hidden'); $('#err').textContent = 'Die App ist noch nicht eingerichtet.'; } }).catch(() => {});
   const go = () => guarded(async () => {
@@ -2671,6 +2680,7 @@ function menuSheet() {
       <button class="btn" id="mTok">🔗 GitHub-Schlüssel erneuern</button>` : ''}
       <button class="btn" id="mReload">🔄 Neu laden</button>
       <button class="btn danger" id="mOut">Abmelden</button>
+      ${S.lock ? '<button class="btn ghost" id="mSiteOut">🔒 Abmelden & Seite sperren</button>' : ''}
     </div>`);
   const on = (id, f) => { const el = $('#' + id); if (el) el.onclick = f; };
   on('mApp', approvalsSheet); on('mPeople', peopleSheet); on('mCats', categoriesSheet); on('mStat', statSizeSheet);
@@ -2679,6 +2689,7 @@ function menuSheet() {
   if (adm) $('#mNT').onclick = () => guarded(async () => { const on = noTeamsOk(); await save(on ? 'Ohne Teams ausgeschaltet' : 'Ohne Teams erlaubt', ctx => { ctx.pub.settings.noTeams = !on; }, {okText: on ? 'Ausgeschaltet ✓ – Spiele brauchen jetzt Teams' : 'Erlaubt ✓'}); menuSheet(); });
   if (adm) { $('#mEd').onclick = editorsSheet; $('#mSub').onclick = subTokSheet; $('#mImp').onclick = importSheet; $('#mTok').onclick = tokenSheet; }
   $('#mGame').onclick = () => gameSheet();
+  if ($('#mSiteOut')) $('#mSiteOut').onclick = siteLockOut;
   $('#mReload').onclick = async () => { closeSheet(true); busy(true, 'Lade …'); await loadLive(); busy(false); toast('Aktualisiert'); };
   $('#mOut').onclick = () => {
     if (localCount() && !confirm('Es gibt ungespeicherte Würfe. Trotzdem abmelden?')) return;
