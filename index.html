@@ -335,7 +335,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 #infoPop h3{margin:0 40px 10px 0;font-size:18px;color:var(--gold2)}#infoPop .itext p{margin:0 0 9px;line-height:1.45;font-size:14.5px}#infoPop .xbtn{position:absolute;top:10px;right:10px}
 .itip{color:var(--gold2);opacity:.85}
 .linkbtn{display:block;background:none;border:0;padding:4px 0;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:left}
-.ibtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--gold2);color:var(--gold2)!important;text-decoration:none;font-weight:700;font-size:15px;margin:6px 8px 0 0;vertical-align:middle}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;color:var(--gold2)!important;text-decoration:none;font-weight:700;font-size:15px;margin:6px 8px 0 0;vertical-align:middle}
 .ihint{font-size:12.5px;color:var(--muted);vertical-align:middle}
 </style>
 </head>
@@ -2221,7 +2221,7 @@ function renderAll() {
  const extra = [o.fastest ? '' : 'Noch keine Zeiten im Zeitraum', S.gw.per === 'tour' ? (sd ? `Wertung ab ${fmtD(sd)}` : 'Bitte Datum wählen') : '',
     can('tdates') ? '<a href="#" id="tourLink" style="color:var(--gold2)">Turniere verwalten</a>' : ''].filter(Boolean).join(' · ');
   S.gwFast = o.fastest;
-  $('#gwInfo').innerHTML = (extra ? extra + '<br>' : '') + '<a href="#" id="gwHelp" class="ibtn" aria-label="Infos zur Berechnung">ⓘ</a><span class="ihint">Doppelt tippen auf Schalter & Zahlen erklärt sie</span>';
+  $('#gwInfo').innerHTML = (extra ? extra + '<br>' : '') + '<a href="#" id="gwHelp" class="ibtn" aria-label="Infos zur Berechnung">ⓘ</a><span class="ihint">Doppelt tippen auf Schalter & Zahlen für Definition</span>';
   $('#gwHelp').onclick = e => { e.preventDefault(); showInfo('gw'); };
   if ($('#tourLink')) $('#tourLink').onclick = e => { e.preventDefault(); tournamentsSheet(); };
   let place = 0;
@@ -2729,6 +2729,8 @@ const INFO_TXT = [[/Elo/, 'elo'], [/Teamgröße/, 'tsz'], [/Heiße Hand|Serien|T
   [/Biere|Strafbier/, 'beers'], [/Turnier/, 'tour'], [/Ex-Zeit|0,33|0,5/, 'ex'], [/Duos|Siegesrate|Spiele/, 'games'], [/Gesamtwertung/, 'gw']];
 function infoKey(el) {
   if (!el || !el.closest) return null;
+  /* Beim Erfassen wird schnell getippt (✓ ✗ ↩, Stoppuhr) – dort keine Erklärungen */
+  if (el.closest('#rows, [data-a], #swGo, #swR, #swd, .sw, input, select, textarea')) return null;
   const tagged = el.closest('[data-info]'); if (tagged) return tagged.dataset.info;
   for (const [sel, k] of INFO_AT) if (el.closest(sel)) return k;
   const box = el.closest('.card,.ocard,.rel,section,#sheetBody'); if (!box) return null;
