@@ -1598,7 +1598,7 @@ function newPersonLabel(ref) {
   for (const np of (GAME.newPeople || [])) if ('new:' + np.tmp === ref) return (np.n || np.s) + ' (neu)';
   return 'Neue Person';
 }
-const namesOf = pids => pids.map(nameOf).join(' & ');
+const namesOf = pids => { const n = pids.map(nameOf); return n.length > 2 ? n.slice(0, -1).join(', ') + ' & ' + n[n.length - 1] : n.join(' & '); };
 /* Eindeutige Kurznamen: „Vorname N.“, bei Gleichheit mehr Buchstaben („Mark Re.“ / „Mark Ro.“) */
 function recomputeShorts(pub, names) {
   const groups = {};
@@ -1766,7 +1766,7 @@ function validItem(o) {
   const np = Array.isArray(o.newPeople) ? o.newPeople.filter(x => x && /^n[0-9a-f]{10}$/.test(x.tmp) && typeof x.enc === 'string').map(x => ({tmp: x.tmp, s: String(x.s || 'Neu').slice(0, 40), n: x.n ? String(x.n).slice(0, 40) : undefined, enc: x.enc})) : [];
   const ref = p => typeof p === 'string' && (/^new:n[0-9a-f]{10}$/.test(p) || /^p[0-9a-z]+$/.test(p));
   const by = String(o.by || '').slice(0, 40);
-  if (o.kind === 'time' && Array.isArray(o.p) && o.p.length && o.p.length <= 2 && o.p.every(ref) && typeof o.t === 'number' && o.t > 0 && o.t < 1000 && typeof o.c === 'string')
+  if (o.kind === 'time' && Array.isArray(o.p) && o.p.length && o.p.length <= (isOther((S.pub && S.pub.categories || []).find(c => c.id === o.c)) ? 12 : 2) && o.p.every(ref) && typeof o.t === 'number' && o.t > 0 && o.t < 1000 && typeof o.c === 'string')
     return {kind: 'time', c: o.c, p: o.p, t: Math.round(o.t * 100) / 100, d, newPeople: np, by, x: String(o.x || '').slice(0, 300),
       ...(typeof o.pn === 'number' && o.pn > 0 && o.pn < 120 && typeof o.r === 'number' && o.r > 0 ? {r: Math.round(o.r * 100) / 100, pn: Math.round(o.pn * 100) / 100} : {}),
       ...(o.an ? {an: 1} : {}), ...(o.w ? {w: String(o.w).slice(0, 60)} : {})};
@@ -2975,7 +2975,7 @@ function addTimeSheet(catPre) {
     <p class="sub">${canDirect() ? 'Jeder Versuch wird gespeichert – die Bestenliste zeigt die Bestzeit.' : 'Dein Eintrag zählt, sobald ihn ein Freigeber oder der Admin bestätigt.'}</p>
     <div class="field"><label>Kategorie</label><select class="inp" id="cat">${S.pub.categories.map(c => `<option value="${c.id}" ${c.id === catId0 ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
     <details class="rules" id="rulesBox"><summary>📜 Regelwerk</summary><div id="rulesTxt"></div>${isAdmin() ? '<button class="chip" style="margin-top:8px" id="rulesEd">✎ Bearbeiten</button>' : ''}</details>
-    <div class="field" id="pp1"></div><div class="field" id="pp2"></div>
+    <div class="field" id="pp1"></div><div class="picks" id="ppX" style="margin:-4px 0 6px"></div><div class="field" id="pp2"></div>
     <div class="field hidden" id="wF"><label>Was? *</label><input class="inp" id="w" maxlength="60" placeholder="z. B. Radler 0,5 l, kopfüber …"></div>
     <div class="field"><label>Gestoppte Zeit (s)</label><input class="inp" id="tm" inputmode="decimal" placeholder="per Stoppuhr oder von Hand, z. B. 8,37"></div>
     <label class="lbl2">Strafsekunden *</label>
@@ -3016,12 +3016,24 @@ function addTimeSheet(catPre) {
   $('#pens').onclick = e => { const b = e.target.closest('[data-p]'); if (!b) return; penSet = true; pen = +b.dataset.p ? Math.round((pen + +b.dataset.p) * 100) / 100 : 0; if (!+b.dataset.p) $('#penc').value = ''; upd(); };
   $('#valid').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; valid = b.dataset.v; upd(); };
   $('#penc').oninput = () => { penSet = true; upd(); }; $('#tm').oninput = () => { upd(); drawStops(); }; upd();
-  let p1, p2;
+  let p1, p2, more = [];
+  /* „Andere“: beliebig viele weitere Personen (Teamzeiten) */
+  const drawMore = () => {
+    $('#ppX').innerHTML = more.map((p, i) => `<button class="on" data-i="${i}">${esc(p.id ? nameOf(p.id) : fullName(p) + ' (neu)')} ✕</button>`).join('');
+    $('#ppX').onclick = e => { const b = e.target.closest('[data-i]'); if (b) { more.splice(+b.dataset.i, 1); drawMore(); } };
+    const morePick = () => personPicker($('#pp2'), more.length ? '＋ Noch jemand (Teamzeit)' : '＋ Weitere Person (Teamzeit, optional)', p => {
+      if (more.length >= 11) return toast('Maximal 12 Personen.');
+      if (!(p.id && (more.some(x => x.id === p.id) || (p1.get() || {}).id === p.id))) more.push(p);
+      drawMore(); morePick(); });
+    morePick();
+  };
   const setup = () => {
-    const c = S.pub.categories.find(x => x.id === $('#cat').value);
+    const c = S.pub.categories.find(x => x.id === $('#cat').value), oth = isOther(c);
     p1 = personPicker($('#pp1'), c.duo ? 'Person 1' : 'Person');
-    $('#pp2').classList.toggle('hidden', !c.duo);
+    $('#pp2').classList.toggle('hidden', !c.duo && !oth);
+    more = []; $('#ppX').innerHTML = '';
     p2 = c.duo ? personPicker($('#pp2'), 'Person 2') : null;
+    if (oth) drawMore();
     $('#wF').classList.toggle('hidden', !isOther(c));
     $('#rulesBox').querySelector('summary').textContent = '📜 Regelwerk ' + c.name + (ruleTxt('cat', c.id) ? '' : ' (noch leer)');
     $('#rulesTxt').innerHTML = ruleHtml(ruleTxt('cat', c.id));
@@ -3031,8 +3043,9 @@ function addTimeSheet(catPre) {
   $('#go').onclick = () => guarded(async () => {
     if (sw.start != null) throw new Error('Erst die Stoppuhr anhalten.');
     const catId = $('#cat').value, c = S.pub.categories.find(x => x.id === catId);
-    const sel = [p1.get(), p2 && p2.get()].filter(Boolean);
-    if (sel.length !== (c.duo ? 2 : 1)) throw new Error(c.duo ? 'Bitte zwei Personen auswählen.' : 'Bitte eine Person auswählen.');
+    const sel = isOther(c) ? [p1.get(), ...more].filter(Boolean) : [p1.get(), p2 && p2.get()].filter(Boolean);
+    if (isOther(c)) { if (!p1.get()) throw new Error('Bitte mindestens eine Person auswählen.'); if (new Set(sel.filter(x => x.id).map(x => x.id)).size !== sel.filter(x => x.id).length) throw new Error('Eine Person ist doppelt drin.'); }
+    else if (sel.length !== (c.duo ? 2 : 1)) throw new Error(c.duo ? 'Bitte zwei Personen auswählen.' : 'Bitte eine Person auswählen.');
     if (c.duo && sel[0].id && sel[0].id === (sel[1] && sel[1].id)) throw new Error('Zweimal dieselbe Person.');
     const r = parseTime($('#tm').value); if (!r) throw new Error('Bitte Zeit stoppen oder eingeben, z. B. 8,37');
     if (!penSet) throw new Error('Bitte Strafsekunden auswählen – „0“, wenn es keine gab.');
