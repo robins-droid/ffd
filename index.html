@@ -330,6 +330,10 @@ body.locked>header,body.locked>.wrap,body.locked>nav,body.locked>.fab{visibility
 .tvhead b{display:block;font-size:19px}.tvhead span{display:block;font-size:12.5px;color:var(--muted)}
 body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 .row .pl.tlab{width:auto;min-width:34px;font-size:12.5px;white-space:nowrap;padding-right:4px}
+#infoPop{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center}
+#infoPop.on{display:flex}#infoPop .ibox{position:relative;background:var(--card,#2a1a2e);border:1px solid var(--line,#4a3550);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:80vh;overflow:auto;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}
+#infoPop h3{margin:0 40px 10px 0;font-size:18px;color:var(--gold2)}#infoPop .itext p{margin:0 0 9px;line-height:1.45;font-size:14.5px}#infoPop .xbtn{position:absolute;top:10px;right:10px}
+.itip{color:var(--gold2);opacity:.85}
 </style>
 </head>
 <body>
@@ -363,7 +367,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
     <div id="eloBox" class="hidden"></div>
     <div id="sumBox">
     <h3 class="sect">Gesamtwertung</h3>
-    <p class="hint" style="margin:-4px 2px 10px">Summe = Ex-Prozente (schnellste Zeit = 100 %) + Wurf-Wert (Statistik-Prozente × 2)</p>
+    <p class="hint" style="margin:-4px 2px 10px">Summe = Ex-Prozente (schnellste Zeit = 100 %) + Wurf-Wert (Statistik-Prozente × 2)<br><span class="itip">ⓘ Lange drücken oder doppelt tippen – auf Schalter, Überschriften und Zahlen – erklärt die Berechnung.</span></p>
     <div class="ctl"><label>Wurf-Wert</label><div class="seg" id="gwMode"><button data-v="avg">Ø × 2</button><button data-v="max">Max × 2</button><button data-v="rel">Verlässlich × 2</button></div></div>
     <div class="ctl"><label>Zeitraum</label><div class="seg" id="gwPer"><button data-v="all">Gesamt</button><button data-v="year">Jahr</button><button data-v="tour">Ab Turnier / Datum</button></div></div>
     <div class="ctl hidden" id="gwYearC"><label>Jahr</label><select class="inp" id="gwYear" style="flex:1"></select></div>
@@ -378,7 +382,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
   <section id="vTimes" class="hidden">
     <div class="chips" id="catChips"></div>
     <div id="podium" class="podium"></div>
-    <div class="kpis" id="catKpis"></div><p class="kpihint" id="catHint">📈 Kennzahlen antippen für die Entwicklung</p>
+    <div class="kpis" id="catKpis"></div><p class="kpihint" id="catHint">📈 Kennzahlen antippen für die Entwicklung · <span class="itip">ⓘ lange drücken = Erklärung</span></p>
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="Name suchen …" autocomplete="off"></div>
     <div class="list" id="timeList"></div>
   </section>
@@ -390,7 +394,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
       <div><b id="statSizeLbl"></b><br><span>Gesamtquote = alle Würfe zusammen</span></div>
       <button class="chip" id="statSizeBtn">Ändern</button>
     </div>
-    <div class="kpis" id="throwKpis"></div><p class="kpihint" id="throwHint">📈 Kennzahlen antippen für die Entwicklung</p>
+    <div class="kpis" id="throwKpis"></div><p class="kpihint" id="throwHint">📈 Kennzahlen antippen für die Entwicklung · <span class="itip">ⓘ lange drücken = Erklärung</span></p>
     <button class="btn ghost" id="konsBtn" style="margin:4px 0 8px">🔥 Serien & Heiße Hand</button>
     <div class="list" id="throwList"></div>
   </section>
@@ -2622,12 +2626,7 @@ $('#hq').oninput = () => {
 $('#hqRes').onclick = e => { const b = e.target.closest('[data-pid]'); if (b) { profileSheet(b.dataset.pid); $('#hq').value = ''; $('#hqRes').classList.add('hidden'); } };
 $('#konsBtn').onclick = () => konsSheet();
 $('#tmSeg').onclick = e => { const b = e.target.closest('[data-v]'); if (b) { S.tm = b.dataset.v; renderThrows(); } };
-$('#relInfo').onclick = () => openSheet(`<h2>ⓘ Wie wird gerechnet?</h2>
-  <div class="card"><b>Ø Stat.</b><p class="hint" style="margin:4px 0 0">Durchschnitt aller vollen Statistiken (je ${S.pub.settings.statSize} Würfe).</p></div>
-  <div class="card"><b>± (Standardabweichung)</b><p class="hint" style="margin:4px 0 0">Wie weit die einzelnen Statistiken typischerweise vom eigenen Durchschnitt abweichen. Kleine Zahl = konstant, große Zahl = schwankend. Ab 3 Statistiken.</p></div>
-  <div class="card"><b>Verlässlicher Wert</b><p class="hint" style="margin:4px 0 0">= Ø Stat. − ½ × Standardabweichung</p>
-    <p class="hint" style="margin:6px 0 0">Beispiel: Ø 40 % ±6 → <b>37 %</b> · Ø 42 % ±20 → <b>32 %</b>.<br>Wer konstant trifft, liegt vorne – auch wenn der Durchschnitt etwas niedriger ist. Wer zwischen sehr gut und sehr schlecht schwankt, rutscht nach hinten.</p></div>
-  <div class="card"><b>Rangliste „Normal“</b><p class="hint" style="margin:4px 0 0">Sortiert nach der Gesamtquote (alle Würfe zusammen).</p></div>`);
+$('#relInfo').onclick = () => showInfo('throws');
 $('#tabHome').onclick = () => { S.view = 'home'; render(); scrollTo(0, 0); };
 $('#homeRules').onclick = () => rulesSheet();
 $('#tabTour').onclick = () => { S.view = 'tour'; render(); scrollTo(0, 0); };
@@ -2672,6 +2671,93 @@ $('#statSizeBtn').onclick = () => statSizeSheet();
 window.addEventListener('beforeunload', e => { if (localCount()) { e.preventDefault(); e.returnValue = ''; } });
 
 /* ---------- Login & Menü ---------- */
+/* ---------- Erklärungen: lange drücken oder doppelt tippen ---------- */
+const INFO = {
+  gw: ['🏅 Gesamtwertung', () => `<p><b>Summe = Ex-Prozente + Wurf-Wert</b></p>
+    <p><b>Ex-Prozente:</b> Deine beste gültige Ex-Zeit in der gewählten Kategorie und im Zeitraum im Vergleich zur schnellsten: schnellste Zeit ÷ deine Zeit × 100. Die schnellste Person hat 100 %.</p>
+    <p><b>Wurf-Wert:</b> Deine Trainings-Wurfstatistiken (je ${S.pub.settings.statSize} Würfe, ab ${minTeam()}er-Teams) × 2 – je nach Auswahl Durchschnitt, beste oder verlässlicher Wert.</p>
+    <p>Beispiel: 80 % Ex + Ø 35 % Würfe → 80 + 70 = <b>150</b>.</p>
+    <p>Gewertet wird nur, wer im Zeitraum mindestens eine volle Statistik <i>und</i> eine Ex-Zeit hat. Gleiche Summe = gleicher Platz.</p>`],
+  gwMode: ['Wurf-Wert', () => `<p><b>Ø × 2:</b> Durchschnitt aller vollen Statistiken.</p><p><b>Max × 2:</b> deine beste einzelne Statistik.</p>
+    <p><b>Verlässlich × 2:</b> Ø − ½ Standardabweichung – wer konstant trifft, wird belohnt, starke Schwankungen kosten Punkte (Standardabweichung erst ab 3 Statistiken).</p>`],
+  gwPer: ['Zeitraum', () => `<p><b>Gesamt:</b> alle Einträge.</p><p><b>Jahr:</b> nur Ex-Zeiten und Würfe aus dem Jahr.</p>
+    <p><b>Ab Turnier / Datum:</b> alles ab dem Turniertag bzw. Datum (einschließlich) bis heute.</p><p>Die 100 % richten sich immer nach der schnellsten Zeit im gewählten Zeitraum.</p>`],
+  gwCat: ['Ex-Kategorie', () => `<p>Welche Ex-Zeiten für die Ex-Prozente zählen – nur Einzel-Kategorien mit 0,33 l oder 0,5 l. Annullierte Zeiten zählen nicht.</p>`],
+  elo: ['📈 Elo', () => { const W = S.pub.settings.eloW || {}; return `<p>Jeder startet mit <b>1000</b>. Pro Spiel wird die Siegchance aus dem Elo-Schnitt beider Teams berechnet:</p>
+    <p style="text-align:center"><b>Erwartung = 1 ÷ (1 + 10^((Gegner − Eigenes) ÷ 400))</b></p>
+    <p>Alle Spieler des Teams bekommen bzw. verlieren <b>32 × Gewicht × (Ergebnis − Erwartung)</b>. Wer gegen ein stärkeres Team gewinnt, bekommt viel, wer gegen ein schwächeres verliert, verliert viel.</p>
+    <p>Zählt: Turnierspiele (auch laufende Turniere) und Spielmodus-Spiele mit zwei Teams und Sieger. Gäste und „Gegen andere“ zählen nicht.</p>
+    <p>Gewichtung: Turnier ${W.real ?? 1} · Testturnier ${W.test ?? 1} · Spiel ${W.game ?? 1}.</p>`; }],
+  ex: ['⏱️ Ex-Zeiten', () => `<p><b>Endzeit = gestoppte Zeit + Strafsekunden.</b></p>
+    <p>Pro Person zählt die beste gültige Zeit. <b>Annullierte</b> Zeiten stehen im Profil, zählen aber nirgends.</p>
+    <p><b>Kennzahlen:</b> Ø Bestzeit und Median beziehen sich auf die Bestzeiten aller Teilnehmer, „Versuche“ auf alle gültigen Zeiten. Antippen zeigt die Entwicklung.</p>`],
+  tk: ['🎯 Training / 🏆 Turnier', () => `<p>Würfe werden getrennt gezählt: <b>Training</b> (Spielmodus, normale Spiele) und <b>Turnier</b> (Spiele, die einem Turnier zugeordnet sind). Die Gesamtwertung nutzt nur Training.</p>`],
+  throws: ['🎯 Wurfstatistik', () => `<p><b>1 Statistik = ${S.pub.settings.statSize} Würfe</b> am Stück. Angefangene Statistiken zählen bei den Würfen, aber noch nicht im Schnitt.</p>
+    <p><b>Gesamt:</b> alle Treffer ÷ alle Würfe.</p><p><b>Ø Stat.:</b> Durchschnitt der vollen Statistiken.</p>
+    <p><b>± (Standardabweichung):</b> wie stark die einzelnen Statistiken um den eigenen Schnitt schwanken – klein = konstant (ab 3 Statistiken).</p>
+    <p><b>Verlässlicher Wert:</b> Ø − ½ × Standardabweichung. Beispiel: Ø 40 % ±6 → 37 %, Ø 42 % ±20 → 32 %.</p>
+    <p><b>Teamgröße:</b> Würfe aus Spielen mit weniger als ${minTeam()} Spielern im eigenen Team (Gäste zählen mit) zählen nur in „Wurfquote nach Teamgröße“.</p>`],
+  throwKpis: ['Wurf-Kennzahlen', () => `<p><b>Ø Quote:</b> alle Treffer aller Spieler ÷ alle Würfe (Vereinsschnitt).</p><p><b>Ø je Statistik:</b> Durchschnitt über alle vollen Statistiken aller Spieler.</p><p>Es zählen nur Würfe ab ${minTeam()}er-Teams. Antippen zeigt die Entwicklung.</p>`],
+  kons: ['🔥 Serien & Heiße Hand', () => `<p><b>Längste Trefferserie:</b> die meisten Treffer am Stück.</p>
+    <p><b>Heiße Hand:</b> Trefferquote direkt nach einem Treffer im Vergleich zur Quote nach einem Fehlwurf (je mindestens 10 solche Würfe). Liegt „nach Treffer“ deutlich höher, wirft man sich warm.</p>
+    <p><b>Spiele mit mind. 1 Treffer:</b> Anteil der Spiele, in denen man mindestens einmal getroffen hat.</p>
+    <p>Alles nur aus Würfen, die einzeln erfasst wurden – alte importierte Prozentwerte enthalten keine Reihenfolge.</p>`],
+  beers: ['🍺 Biere', () => `<p>Gezählt werden pro Person:</p><p>• <b>1 Bier pro Spiel</b> (Spielmodus)<br>• <b>+ Strafbiere</b><br>• <b>+ 1 Bier pro Ex-Zeit</b> (auch annullierte und Teamzeiten)<br>• <b>+ Bierlisten/Trainings</b> bis zum Stand der Listen (nur bei „Alle Jahre“; die dort schon enthaltenen Ex-Zeiten werden abgezogen)</p>
+    <p><b>🍺 fertig</b> im Spiel: übernimmt die Treffer des Teams seit Beginn des eigenen Biers – daraus entsteht „Treffer pro Bier“.</p>`],
+  tsz: ['🎯 Wurfquote nach Teamgröße', () => `<p>Trefferquote getrennt nach der Anzahl Spieler im eigenen Team (inkl. Gäste). Bei „Gegen andere“ zählen alle eingetragenen Spieler.</p><p>Mit * markierte Größen liegen unter ${minTeam()} und zählen <b>nur hier</b>, nicht in der übrigen Wurfstatistik.</p>`],
+  konsP: ['📊 Konstanz', () => `<p><b>±:</b> Standardabweichung der Statistiken – wie stark sie um den eigenen Schnitt schwanken.</p><p><b>Verlässlich:</b> Ø − ½ Standardabweichung.</p><p>Serien und Heiße Hand nur aus einzeln erfassten Würfen.</p>`],
+  tour: ['🏆 Turniere', () => `<p><b>Platzierungen:</b> 1./2. = Finale, 3./4. = Spiel um Platz 3 (ohne dieses Spiel: HF), VF = Plätze 5–8, AF = Plätze 9–16, Gruppe = in der Gruppenphase raus. Steht schon live fest, sobald ein Team ausscheidet.</p>
+    <p><b>Titel:</b> 1. Plätze in abgeschlossenen echten Turnieren. <b>Siege:Niederlagen</b> und <b>Elo</b> zählen auch laufende Turniere.</p>
+    <p><b>Gruppentabelle:</b> Siege, dann die eingestellten Tie-Breaker (z. B. direkter Vergleich, Differenz, Punkte).</p>`],
+  game: ['🎯 Spiel erfassen', () => `<p><b>✓ / ✗:</b> Treffer bzw. daneben – jeder Wurf zählt in der Wurfstatistik (bei Teams ab ${minTeam()} Spielern inkl. Gästen).</p>
+    <p><b>Strafbier:</b> erhaltene Strafbiere, zählen bei den Bieren mit.</p>
+    <p><b>🍺 fertig:</b> Bier leer – übernimmt automatisch die Treffer des eigenen Teams seit Beginn dieses Biers (antippen zum Ändern). Daraus wird „Ø Team-Treffer pro Bier“.</p>
+    <p><b>Gäste</b> zählen für Teamgröße und Treffer pro Bier, bekommen aber keine Statistik.</p>
+    <p>Mit zwei Teams und Sieger zählt das Spiel auch für Elo und Siege. Nichts ist gespeichert, bis du unten speicherst.</p>`],
+  games: ['🍻 Spiele', () => `<p><b>Siegesrate:</b> Siege ÷ Spiele mit Sieger (Spielmodus, Turniere zählen im Turnier-Bereich).</p><p><b>Duos:</b> zwei Spieler im selben Team; „eingespielt“ = meiste gemeinsame Spiele.</p>`]
+};
+/* Wo gilt welche Erklärung? Erst feste Stellen, dann nach Überschrift */
+const INFO_AT = [['#gwMode', 'gwMode'], ['#gwPer,#gwYearC,#gwSince', 'gwPer'], ['#gwCat', 'gwCat'], ['#gwView,#eloBox', 'elo'], ['#sumBox', 'gw'],
+  ['#tkSeg', 'tk'], ['#throwKpis', 'throwKpis'], ['#vThrows', 'throws'], ['#vTimes', 'ex'], ['#pGames', 'beers'], ['#pKons', 'konsP'], ['.game', 'game'], ['#vTour', 'tour']];
+const INFO_TXT = [[/Elo/, 'elo'], [/Teamgröße/, 'tsz'], [/Heiße Hand|Serien|Trefferserie|mind\. 1 Treffer/, 'kons'], [/Wurfstatistik|Turnier-Würfe/, 'throws'],
+  [/Biere|Strafbier/, 'beers'], [/Turnier/, 'tour'], [/Ex-Zeit|0,33|0,5/, 'ex'], [/Duos|Siegesrate|Spiele/, 'games'], [/Gesamtwertung/, 'gw']];
+function infoKey(el) {
+  if (!el || !el.closest) return null;
+  const tagged = el.closest('[data-info]'); if (tagged) return tagged.dataset.info;
+  for (const [sel, k] of INFO_AT) if (el.closest(sel)) return k;
+  const box = el.closest('.card,.ocard,.rel,section,#sheetBody'); if (!box) return null;
+  const head = (el.closest('.card,.ocard,.rel') || box).querySelector('b,h3,h2,.rh');
+  const txt = (head ? head.textContent : '') + ' ' + ((el.closest('h3,h2,b,.rh') || {}).textContent || '');
+  for (const [re, k] of INFO_TXT) if (re.test(txt)) return k;
+  const h2 = $('#sheetBody h2'); if (el.closest('#sheetBody') && h2) for (const [re, k] of INFO_TXT) if (re.test(h2.textContent)) return k;
+  return null;
+}
+function showInfo(k) {
+  const it = INFO[k]; if (!it) return false;
+  let pop = $('#infoPop'); if (!pop) { pop = document.createElement('div'); pop.id = 'infoPop'; document.body.appendChild(pop); }
+  pop.innerHTML = `<div class="ibox"><button class="xbtn" aria-label="Schließen">✕</button><h3>ⓘ ${it[0]}</h3><div class="itext">${it[1]()}</div></div>`;
+  pop.classList.add('on'); pop.onclick = e => { if (e.target === pop || e.target.closest('.xbtn')) pop.classList.remove('on'); };
+  return true;
+}
+(() => {
+  let tm = null, sx = 0, sy = 0, fired = 0, downK = null, downT = 0;
+  /* Doppelt tippen selbst erkennen – der erste Tipp kann die Stelle neu zeichnen, dann feuert der Browser kein dblclick */
+  let px = 0, py = 0;
+  document.addEventListener('pointerdown', e => {
+    if (e.target.closest('#infoPop')) return;
+    const k = infoKey(e.target), now = Date.now();
+    if (downK && now - downT < 400 && Math.abs(e.clientX - px) + Math.abs(e.clientY - py) < 30) { const k1 = downK; downK = null; if (showInfo(k1)) { fired = now; setTimeout(() => { const s2 = getSelection && getSelection(); s2 && s2.removeAllRanges(); }, 0); } return; }
+    downK = k; downT = now; px = e.clientX; py = e.clientY;
+  }, true);
+  document.addEventListener('touchstart', e => { if (e.touches.length !== 1) return; const t = e.touches[0]; sx = t.clientX; sy = t.clientY; const target = e.target;
+    clearTimeout(tm); tm = setTimeout(() => { const k = infoKey(target); if (k && showInfo(k)) { fired = Date.now(); navigator.vibrate && navigator.vibrate(15); } }, 550); }, {passive: true});
+  const stop = () => clearTimeout(tm);
+  document.addEventListener('touchmove', e => { const t = e.touches[0]; if (Math.abs(t.clientX - sx) + Math.abs(t.clientY - sy) > 10) stop(); }, {passive: true});
+  document.addEventListener('touchend', stop, {passive: true}); document.addEventListener('touchcancel', stop, {passive: true});
+  document.addEventListener('click', e => { if (Date.now() - fired < 450) { e.preventDefault(); e.stopPropagation(); } }, true);
+  document.addEventListener('contextmenu', e => { if (Date.now() - fired < 900 || infoKey(e.target)) e.preventDefault(); });
+})();
+
 /* Vereins-Passwort auf diesem Gerät vergessen (und ggf. abmelden) */
 function siteLockOut() {
   if (localCount() && !confirm('Es gibt ungespeicherte Würfe. Trotzdem sperren?')) return;
