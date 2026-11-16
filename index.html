@@ -641,7 +641,7 @@ TE.elo = (summaries, games, W = TE.EW) => {
 
 TE.summary = t => ({id: t.id, name: t.name, d: t.d, sport: t.sport, type: t.type, status: t.status,
   teams: t.teams.map(x => ({id: x.id, name: x.name, players: x.players})), places: t.status === 'done' ? TE.places(t) : undefined,
-  games: t.status === 'done' ? TE.games(t) : undefined, champ: t.status === 'done' ? TE.champion(t) : undefined});
+  games: t.status !== 'setup' ? TE.games(t) : undefined, champ: t.status === 'done' ? TE.champion(t) : undefined});
 
 if (typeof module !== 'undefined') module.exports = TE;
 if (typeof window === 'undefined') { /* Node-Tests */ } else {
@@ -658,7 +658,12 @@ async function tRead(path) {
   if (S.role && S.token && S.repo && S.repo.branch) { try { const x = await gh('contents/' + path + '?ref=' + S.repo.branch, {raw: true}); return x ? await openJ(JSON.parse(x)) : null; } catch {} }
   try { return await fetchJSON(path); } catch { return null; }
 }
-async function tLoadIndex() { TT.index = (await tRead(TIDX)) || emptyIdx(); return TT.index; }
+async function tLoadIndex() {
+  const idx = (await tRead(TIDX)) || emptyIdx();
+  /* laufende Turniere aus älteren Ständen haben noch keine Spiele in der Zusammenfassung → einmal frisch berechnen */
+  await Promise.all(idx.list.map(async (x, i) => { if ((x.status === 'groups' || x.status === 'ko') && !x.games) { try { const t = await tRead(TPATH(x.id)); if (t) idx.list[i] = TE.summary(t); } catch {} } }));
+  TT.index = idx; return TT.index;
+}
 async function tOpen(id) { busy(true, 'Lade Turnier …'); try { TT.cur = await tRead(TPATH(id)); } finally { busy(false); } if (!TT.cur) return toast('Turnier nicht gefunden'); TT.sub = 'plan'; renderTour(); scrollTo(0, 0); }
 const tName = (t, id) => id === 'BYE' ? 'Freilos' : ((t.teams.find(x => x.id === id) || {}).name || '?');
 const tpn = p => String(p).startsWith('g:') ? p.slice(2) + ' (Gast)' : nameOf(p);
@@ -766,14 +771,22 @@ async function tAct(k) {
   if (k === 'cfg') return tSettingsSheet();
   if (k === 'tpl') return tTemplateSave();
   if (k === 'delete') {
-    if (!confirm('Turnier „' + t.name + '“ endgültig löschen?')) return;
+    const nG = (S.pub.games || []).filter(g => (g.tm && g.tm.tid === t.id) || g.t === t.id).length;
+    const nT = Object.values(S.pub.throws || {}).reduce((a, l) => a + (Array.isArray(l) ? l.filter(c => c.t === t.id && !c.g).length : 0), 0);
+    if (!confirm(`Turnier „${t.name}“ endgültig löschen?\n\nDabei wird alles mitgelöscht: Ergebnisse, Elo-Wertung und Platzierungen${nG ? `, ${nG} live erfasste Spiele samt Würfen, Strafbieren und Bieren` : ''}${nT ? `, ${nT} weitere Wurf-Einträge zu diesem Turnier` : ''}.`)) return;
     return guarded(async () => {
+      let gone = {g: 0, w: 0};
       await save('Turnier gelöscht: ' + t.name, ctx => {
         const idx = ctx.x[TIDX] || emptyIdx(); idx.list = idx.list.filter(x => x.id !== t.id); ctx.x[TIDX] = idx; ctx.xw.add(TIDX);
         ctx.pub.tournaments = (ctx.pub.tournaments || []).filter(x => x.id !== t.id);
-        if (t.tv) (ctx.tvDel ||= []).push(TVPATH(t.id));
+        const dead = (ctx.pub.games || []).filter(g => (g.tm && g.tm.tid === t.id) || g.t === t.id);
+        for (const g of dead) { const r = removeGameThrows(ctx.pub, g); gone.w += r.removed; }
+        gone.g = dead.length; ctx.pub.games = (ctx.pub.games || []).filter(g => !dead.includes(g));
+        for (const [pid, l] of Object.entries(ctx.pub.throws || {})) if (Array.isArray(l) && l.some(c => c.t === t.id)) { gone.w += l.filter(c => c.t === t.id).reduce((a, c) => a + c.s.length, 0); ctx.pub.throws[pid] = l.filter(c => c.t !== t.id); }
+        (ctx.tvDel ||= []).push(TPATH(t.id)); if (t.tv) ctx.tvDel.push(TVPATH(t.id));
         ctx.after = async () => { TT.index = idx; TT.cur = null; };
-      }, {files: [TIDX], okText: 'Gelöscht ✓'});
+      }, {files: [TIDX], quiet: true});
+      toast('Turnier gelöscht ✓' + (gone.g ? ` inkl. ${gone.g} Spiele` : '') + (gone.w ? ` und ${gone.w} Würfe` : ''));
       renderTour();
     });
   }
@@ -1164,7 +1177,7 @@ async function tApplyResult(mid, res, f) {
 }
 
 /* ---------- Elo / Ewige Tabelle ---------- */
-function eloData() { return TE.elo((TT.index || emptyIdx()).list.filter(x => x.status === 'done'), S.pub.games || [], {...TE.EW, ...(S.pub.settings.eloW || {})}); }
+function eloData() { return TE.elo((TT.index || emptyIdx()).list.filter(x => x.status !== 'setup'), S.pub.games || [], {...TE.EW, ...(S.pub.settings.eloW || {})}); }
 /* Elo-Tabelle im Gesamt-Tab */
 function renderElo(el) {
   const E = eloData(), rows = Object.entries(E).filter(([p]) => S.pub.people[p]).sort((a, b) => b[1].r - a[1].r);
@@ -1200,7 +1213,7 @@ function eloWeightSheet() {
 }
 /* Profil-Baustein: Turnierbilanz + Elo (nur Flunkyball) */
 function tProfileHtml(pid) {
-  const L = ((TT.index || emptyIdx()).list || []).filter(x => x.sport === 'flunkyball' && x.status === 'done' && inYear(x.d));
+  const L = ((TT.index || emptyIdx()).list || []).filter(x => x.sport === 'flunkyball' && x.status !== 'setup' && inYear(x.d));
   const mine = L.map(s => { const tm = (s.teams || []).find(x => (x.players || []).includes(pid)); return tm ? {s, tm, place: (s.places || {})[tm.id]} : null; }).filter(Boolean);
   const E = eloData()[pid];
   if (!mine.length && !E) return '';
@@ -1211,7 +1224,7 @@ function tProfileHtml(pid) {
     ${E ? `<div style="text-align:right"><span>Elo${rk ? ' · Platz ' + rk : ''}</span><br><b style="color:var(--gold2);font-size:20px">${Math.round(E.r)}</b></div>` : ''}</div>
     <div class="bigstat"><div><b>${titles(real)}</b><span>Titel</span></div><div><b>${best(real) ? best(real) + '.' : '–'}</b><span>Beste Platz.</span></div><div><b>${E ? E.w + ':' + E.l : '–'}</b><span>Siege:Nied.</span></div></div>
     ${E && E.hist.length >= 2 ? lineChart(E.hist.map(h => ({y: h.r, label: fmtD(h.d)})), {fmt: v => Math.round(v) + ''}) : ''}
-    <div class="att">${mine.sort((a, b) => (b.s.d || '').localeCompare(a.s.d || '')).map(x => `<button class="click" data-tour="${x.s.id}"><span>${fmtD(x.s.d)}</span><span class="pn">${esc(x.s.name)}${x.s.type === 'real' ? '' : ' · Test'} · ${esc(x.tm.name)}</span><b>${x.place ? x.place + '.' : '–'}</b></button>`).join('')}</div></div>`;
+    <div class="att">${mine.sort((a, b) => (b.s.d || '').localeCompare(a.s.d || '')).map(x => `<button class="click" data-tour="${x.s.id}"><span>${fmtD(x.s.d)}</span><span class="pn">${esc(x.s.name)}${x.s.type === 'real' ? '' : ' · Test'} · ${esc(x.tm.name)}</span><b>${x.s.status !== 'done' ? '<small style="font-weight:600;color:var(--gold2)">läuft</small>' : x.place ? x.place + '.' : '–'}</b></button>`).join('')}</div></div>`;
 }
 
 /* ---------- Teilen: CSV und Bild ---------- */
