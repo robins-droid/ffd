@@ -342,6 +342,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 .wpicks{margin:0 0 6px}.wpicks button{font-size:13px}
 #podium.oth{display:block}.olb1{box-sizing:border-box;width:100%;min-width:0;overflow:hidden}
 .olbe{background:none;border:0;color:var(--muted);font-size:14px;padding:0 4px;cursor:pointer}
+.olb1{cursor:pointer}.olbm{text-align:right;font-size:12.5px;color:var(--gold2);font-weight:600;margin-top:4px}
 </style>
 </head>
 <body>
@@ -2106,6 +2107,17 @@ const wChoices = (inputSel, boxSel) => {
   $(boxSel).onclick = e => { const b = e.target.closest('[data-w]'); if (b) { $(inputSel).value = b.dataset.w; mark(); } };
   $(inputSel).addEventListener('input', mark); mark();
 };
+/* Ganze Rangliste einer Art in „Andere“ */
+function artSheet(k) {
+  const x = otherSubs(true).find(y => y.k === k); if (!x) return;
+  const best = {}; for (const t of x.times) if (validT(t)) { const q = pkey(t.p); if (!best[q] || t.t < best[q].t) best[q] = t; }
+  const arr = Object.values(best).sort((a, b) => a.t - b.t); let pl = 0;
+  const L = arr.map((t, i) => { if (i === 0 || t.t !== arr[i - 1].t) pl = i + 1; return {t, pl}; });
+  const an = x.times.filter(t => !validT(t)).length;
+  openSheet(`<h2>${esc(x.name)}</h2><p class="sub">${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'} · ${x.times.length} Versuche${an ? ` (${an} annulliert)` : ''} · ${S.year === 'all' ? 'alle Jahre' : yLbl('')} · beste Zeit je Person bzw. Team</p>
+    <div class="list" id="artL">${L.map(({t, pl}) => `<button class="row click" data-tid="${t.id}"><span class="pl">${pl <= 3 ? ['🥇', '🥈', '🥉'][pl - 1] : pl}</span><span class="nm">${esc(namesOf(t.p))}<small>${fmtD(t.d)}${x.times.filter(y => validT(y) && pkey(y.p) === pkey(t.p)).length > 1 ? ' · ' + x.times.filter(y => validT(y) && pkey(y.p) === pkey(t.p)).length + ' Versuche' : ''}</small></span><span class="tm">${fmtT(t.t)}</span></button>`).join('') || '<div class="empty">Noch keine gültigen Zeiten</div>'}</div>`);
+  $('#artL').onclick = e => { const b = e.target.closest('[data-tid]'); if (b) attemptSheet(b.dataset.tid); };
+}
 async function renameArt(k) {
   const x = otherSubs().find(y => y.k === k); if (!x) return;
   const nn = (prompt(`Art „${x.name}“ umbenennen in:`, x.name) || '').trim().replace(/[<>]/g, '').slice(0, 60);
@@ -2629,10 +2641,10 @@ function renderOther() {
   const subs = otherSubs(true).filter(x => x.ppl.size && (!q || wKey(x.name).includes(q) || x.times.some(t => namesOf(t.p).toLowerCase().includes(q))));
   const top3 = x => { const best = {}; for (const t of x.times) if (validT(t)) { const k = pkey(t.p); if (!best[k] || t.t < best[k].t) best[k] = t; }
     const arr = Object.values(best).sort((a, b) => a.t - b.t); let pl = 0; return arr.map((t, i) => { if (i === 0 || t.t !== arr[i - 1].t) pl = i + 1; return {t, pl}; }).filter(x => x.pl <= 3); };
-  $('#podium').innerHTML = subs.length ? `<div class="olb">${subs.map(x => `<div class="card olb1"><div class="olbh"><b>${esc(x.name)}${can('cats') ? ` <button class="olbe" data-k="${esc(x.k)}" aria-label="Umbenennen">✎</button>` : ''}</b><small>${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'}</small></div>
-    ${top3(x).map(({t, pl}) => `<button class="olbr" data-tid="${t.id}"><span class="md">${['🥇', '🥈', '🥉'][pl - 1]}</span><span class="nm">${esc(namesOf(t.p))}</span><span class="tm">${fmtT(t.t)}</span></button>`).join('')}</div>`).join('')}</div>
+  $('#podium').innerHTML = subs.length ? `<div class="olb">${subs.map(x => `<div class="card olb1" data-art="${esc(x.k)}"><div class="olbh"><b>${esc(x.name)}${can('cats') ? ` <button class="olbe" data-k="${esc(x.k)}" aria-label="Umbenennen">✎</button>` : ''}</b><small>${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'}</small></div>
+    ${top3(x).map(({t, pl}) => `<button class="olbr" data-tid="${t.id}"><span class="md">${['🥇', '🥈', '🥉'][pl - 1]}</span><span class="nm">${esc(namesOf(t.p))}</span><span class="tm">${fmtT(t.t)}</span></button>`).join('')}<div class="olbm">${x.ppl.size > 3 ? 'Alle ' + x.ppl.size + ' anzeigen ›' : 'Rangliste ›'}</div></div>`).join('')}</div>
     <h3 class="sect" style="margin-top:14px">Alle Einträge</h3>` : '';
-  $('#podium').onclick = e => { const r = e.target.closest('.olbe'); if (r) return renameArt(r.dataset.k); const b = e.target.closest('[data-tid]'); if (b) attemptSheet(b.dataset.tid); };
+  $('#podium').onclick = e => { const r = e.target.closest('.olbe'); if (r) return renameArt(r.dataset.k); const c = e.target.closest('[data-art]'); if (c) artSheet(c.dataset.art); };
   $('#podium').classList.toggle('oth', !!subs.length);
   $('#timeList').innerHTML = rows.length ? rows.map(t => `<button class="row click" data-tid="${t.id}"><span class="nm">${esc(t.w || '–')}<small>${esc(namesOf(t.p))} · ${fmtD(t.d)}${t.an ? ' · annulliert' : ''}${(t.cm || []).length ? ' · 💬' : ''}</small></span><span class="tm" ${t.an ? 'style="text-decoration:line-through;color:var(--muted)"' : ''}>${fmtT(t.t)}</span></button>`).join('')
     : `<div class="empty">${q ? 'Kein Treffer' : 'Hier landen Ex-Aktionen, für die sich keine eigene Kategorie lohnt.'}</div>`;
