@@ -337,6 +337,10 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 .linkbtn{display:block;background:none;border:0;padding:4px 0;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:left}
 .ibtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;color:var(--gold2)!important;text-decoration:none;font-weight:700;font-size:15px;margin:6px 8px 0 0;vertical-align:middle}
 .ihint{font-size:12.5px;color:var(--muted);vertical-align:middle}
+.olb{display:grid;gap:10px}.olb1{padding:12px 14px;margin:0}.olbh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.olbh small{color:var(--muted);font-size:12px}
+.olbr{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:inherit;font:inherit;padding:5px 0;text-align:left;cursor:pointer}.olbr{align-items:flex-start}.olbr .nm{flex:1;min-width:0;white-space:normal;line-height:1.3}.olbr .tm{white-space:nowrap}.olbr .tm{font-weight:700;font-variant-numeric:tabular-nums}.olbr .md{width:22px}
+.wpicks{margin:0 0 6px}.wpicks button{font-size:13px}
+#podium.oth{display:block}.olb1{box-sizing:border-box;width:100%;min-width:0;overflow:hidden}
 </style>
 </head>
 <body>
@@ -2081,6 +2085,26 @@ async function guarded(fn, errEl) {
 }
 
 /* ---------- Statistik ---------- */
+/* „Andere“: Unterkategorien = Eintrag „Was?“ (Groß-/Kleinschreibung egal) */
+const wKey = w => String(w || '').trim().toLowerCase().replace(/\s+/g, ' ');
+function otherSubs(withYear = false) {
+  const oc = S.pub.categories.find(isOther); if (!oc) return [];
+  const m = new Map();
+  for (const t of S.pub.times) if (t.c === oc.id && t.w && (!withYear || inYear(t.d))) {
+    const k = wKey(t.w); let e = m.get(k); if (!e) m.set(k, e = {k, name: t.w.trim(), times: [], ppl: new Set()});
+    e.times.push(t); if (validT(t)) t.p.forEach(p => e.ppl.add(p));
+  }
+  return [...m.values()].sort((a, b) => b.ppl.size - a.ppl.size || b.times.length - a.times.length || a.name.localeCompare(b.name, 'de'));
+}
+/* Bekannte Schreibweise übernehmen, damit „radler“ und „Radler“ eins sind */
+const wNorm = w => { const k = wKey(w), e = otherSubs().find(x => x.k === k); return e ? e.name : String(w || '').trim(); };
+const wChoices = (inputSel, boxSel) => {
+  const subs = otherSubs(); if (!subs.length) { $(boxSel).innerHTML = ''; return; }
+  $(boxSel).innerHTML = subs.slice(0, 20).map(x => `<button type="button" data-w="${esc(x.name)}">${esc(x.name)}</button>`).join('');
+  const mark = () => { const k = wKey($(inputSel).value); $(boxSel).querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', wKey(b.dataset.w) === k)); };
+  $(boxSel).onclick = e => { const b = e.target.closest('[data-w]'); if (b) { $(inputSel).value = b.dataset.w; mark(); } };
+  $(inputSel).addEventListener('input', mark); mark();
+};
 function bestTimes(cat) {
   const best = {};
   for (const t of S.pub.times) if (t.c === cat && validT(t) && inYear(t.d)) { const k = pkey(t.p); if (!best[k] || t.t < best[k].t) best[k] = t; }
@@ -2570,7 +2594,7 @@ function renderTimes() {
   if (isOther(cats.find(c => c.id === S.cat))) return renderOther();
   const list = ranked(S.cat), top = list.slice(0, 3);
   const pod = i => top[i] ? `<div class="pod p${i + 1}"><div class="medal">${i + 1}</div><div class="nm">${esc(namesOf(top[i].p))}</div><div class="tm">${fmtT(top[i].t)}</div></div>` : '<div></div>';
-  $('#podium').innerHTML = list.length ? pod(1) + pod(0) + pod(2) : '';
+  $('#podium').innerHTML = list.length ? pod(1) + pod(0) + pod(2) : ''; $('#podium').onclick = null; $('#podium').classList.remove('oth');
   const bests = list.map(x => x.t), tries = S.pub.times.filter(t => t.c === S.cat && validT(t) && inYear(t.d));
   $('#catKpis').classList.add('click'); $('#catKpis').onclick = () => list.length && catDevSheet(S.cat);
   $('#catKpis').innerHTML = list.length ? `<div><b>${list.length}</b><span>${S.pub.categories.find(c => c.id === S.cat)?.duo ? 'Duos' : 'Teilnehmer'}</span></div>
@@ -2590,6 +2614,14 @@ function renderOther() {
   const q = S.q.trim().toLowerCase();
   const rows = S.pub.times.filter(t => t.c === S.cat && inYear(t.d)).sort((a, b) => (b.d || '').localeCompare(a.d || ''))
     .filter(t => !q || namesOf(t.p).toLowerCase().includes(q) || (t.w || '').toLowerCase().includes(q));
+  const subs = otherSubs(true).filter(x => x.ppl.size && (!q || wKey(x.name).includes(q) || x.times.some(t => namesOf(t.p).toLowerCase().includes(q))));
+  const top3 = x => { const best = {}; for (const t of x.times) if (validT(t)) { const k = pkey(t.p); if (!best[k] || t.t < best[k].t) best[k] = t; }
+    const arr = Object.values(best).sort((a, b) => a.t - b.t); let pl = 0; return arr.map((t, i) => { if (i === 0 || t.t !== arr[i - 1].t) pl = i + 1; return {t, pl}; }).filter(x => x.pl <= 3); };
+  $('#podium').innerHTML = subs.length ? `<div class="olb">${subs.map(x => `<div class="card olb1"><div class="olbh"><b>${esc(x.name)}</b><small>${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'}</small></div>
+    ${top3(x).map(({t, pl}) => `<button class="olbr" data-tid="${t.id}"><span class="md">${['🥇', '🥈', '🥉'][pl - 1]}</span><span class="nm">${esc(namesOf(t.p))}</span><span class="tm">${fmtT(t.t)}</span></button>`).join('')}</div>`).join('')}</div>
+    <h3 class="sect" style="margin-top:14px">Alle Einträge</h3>` : '';
+  $('#podium').onclick = e => { const b = e.target.closest('[data-tid]'); if (b) attemptSheet(b.dataset.tid); };
+  $('#podium').classList.toggle('oth', !!subs.length);
   $('#timeList').innerHTML = rows.length ? rows.map(t => `<button class="row click" data-tid="${t.id}"><span class="nm">${esc(t.w || '–')}<small>${esc(namesOf(t.p))} · ${fmtD(t.d)}${t.an ? ' · annulliert' : ''}${(t.cm || []).length ? ' · 💬' : ''}</small></span><span class="tm" ${t.an ? 'style="text-decoration:line-through;color:var(--muted)"' : ''}>${fmtT(t.t)}</span></button>`).join('')
     : `<div class="empty">${q ? 'Kein Treffer' : 'Hier landen Ex-Aktionen, für die sich keine eigene Kategorie lohnt.'}</div>`;
 }
@@ -3110,7 +3142,7 @@ function addTimeSheet(catPre) {
     <div class="field"><label>Kategorie</label><select class="inp" id="cat">${S.pub.categories.map(c => `<option value="${c.id}" ${c.id === catId0 ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
     <details class="rules" id="rulesBox"><summary>📜 Regelwerk</summary><div id="rulesTxt"></div>${isAdmin() ? '<button class="chip" style="margin-top:8px" id="rulesEd">✎ Bearbeiten</button>' : ''}</details>
     <div class="field" id="pp1"></div><div class="picks" id="ppX" style="margin:-4px 0 6px"></div><div class="field" id="pp2"></div>
-    <div class="field hidden" id="wF"><label>Was? *</label><input class="inp" id="w" maxlength="60" placeholder="z. B. Radler 0,5 l, kopfüber …"></div>
+    <div class="field hidden" id="wF"><label>Was? *</label><div class="picks wpicks" id="wC"></div><input class="inp" id="w" maxlength="60" placeholder="Oben antippen oder neu eingeben, z. B. Radler 0,5 l"></div>
     <div class="field"><label>Gestoppte Zeit (s)</label><input class="inp" id="tm" inputmode="decimal" placeholder="per Stoppuhr oder von Hand, z. B. 8,37"></div>
     <label class="lbl2">Strafsekunden *</label>
     <div class="pens" id="pens"><button data-p="0" class="zero">0</button>${[0.1, 0.2, 0.5, 1, 2].map(v => `<button data-p="${v}">+${String(v).replace('.', ',')}</button>`).join('')}<input class="inp" id="penc" inputmode="decimal" placeholder="eigene"></div>
@@ -3168,7 +3200,7 @@ function addTimeSheet(catPre) {
     more = []; $('#ppX').innerHTML = '';
     p2 = c.duo ? personPicker($('#pp2'), 'Person 2') : null;
     if (oth) drawMore();
-    $('#wF').classList.toggle('hidden', !isOther(c));
+    $('#wF').classList.toggle('hidden', !isOther(c)); if (isOther(c)) wChoices('#w', '#wC');
     $('#rulesBox').querySelector('summary').textContent = '📜 Regelwerk ' + c.name + (ruleTxt('cat', c.id) ? '' : ' (noch leer)');
     $('#rulesTxt').innerHTML = ruleHtml(ruleTxt('cat', c.id));
   };
@@ -3185,7 +3217,7 @@ function addTimeSheet(catPre) {
     if (!penSet) throw new Error('Bitte Strafsekunden auswählen – „0“, wenn es keine gab.');
     if (!valid) throw new Error('Bitte „Gültig“ oder „Annulliert“ auswählen.');
     const pn = Math.round((pen + custom()) * 100) / 100, t = Math.round((r + pn) * 100) / 100, an = valid === 'an';
-    const w = isOther(c) ? $('#w').value.trim().slice(0, 60) : '';
+    const w = isOther(c) ? wNorm($('#w').value).slice(0, 60) : '';
     if (isOther(c) && !w) { $('#w').focus(); throw new Error('Bitte bei „Andere“ eintragen, was es war.'); }
     const d = $('#dt').value || today(), x = $('#cmt').value.trim().slice(0, 300);
     const extra = {...(pn ? {r, pn} : {}), ...(an ? {an: 1} : {}), ...(w ? {w} : {})};
@@ -3258,13 +3290,14 @@ function editTimeSheet(tid, back) {
     <div class="field"><label>Strafe (s)</label><input class="inp" id="pn" inputmode="decimal" value="${t.pn ? num2(t.pn) : ''}" placeholder="0"></div></div>
     <div class="two"><div class="field"><label>Datum</label><input class="inp" id="dt" type="date" value="${t.d || ''}"></div>
     ${isOther(c) ? `<div class="field"><label>Was?</label><input class="inp" id="w" value="${esc(t.w || '')}"></div>` : '<div></div>'}</div>
+    ${isOther(c) ? '<div class="picks wpicks" id="wC" style="margin-top:-4px"></div>' : ''}
     <label class="check"><input type="checkbox" id="an" ${t.an ? 'checked' : ''}> Annulliert (steht im Profil, zählt aber nicht)</label>
     <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button><button class="btn danger" id="del">Versuch löschen</button>`);
   $('#go').onclick = () => guarded(async () => {
     const r = parseTime($('#tm').value); if (!r) throw new Error('Ungültige Zeit');
     const pn = $('#pn').value.trim() ? parseFloat($('#pn').value.replace(',', '.')) : 0;
     if (!(pn >= 0 && pn < 120)) throw new Error('Ungültige Strafe');
-    const d = $('#dt').value || null, an = $('#an').checked, w = $('#w') ? $('#w').value.trim().slice(0, 60) : null;
+    const d = $('#dt').value || null, an = $('#an').checked, w = $('#w') ? wNorm($('#w').value).slice(0, 60) : null;
     await save('Zeit geändert', ctx => {
       const x = ctx.pub.times.find(y => y.id === tid); if (!x) throw new Error('Eintrag existiert nicht mehr.');
       x.t = Math.round((r + pn) * 100) / 100;
@@ -3502,7 +3535,35 @@ function categorySheet(id) {
     <div class="field"><label>Name</label><input class="inp" id="nm" value="${esc(c ? c.name : '')}"></div>
     ${c ? '' : '<label class="check"><input type="checkbox" id="duo"> Duo-Kategorie (zwei Personen zusammen)</label>'}
     <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button>
+    ${c && isAdmin() && !isOther(c) && S.pub.categories.some(isOther) ? `<button class="btn" id="toOther">⤵️ In „Andere“ verschieben</button><p class="hint" style="margin-top:2px">Alle ${n} Versuche landen unter „Andere“ mit „${esc(c.name)}“ als Art, die Kategorie verschwindet.</p>` : ''}
+    ${c && isAdmin() && isOther(c) ? `<h3 class="sect">Arten in „Andere“</h3><p class="hint" style="margin-top:0">Eine Art als eigene Kategorie herauslösen – alle ihre Versuche ziehen mit um.</p>
+      <div class="list" id="subl">${otherSubs().map(x => `<div class="row"><span class="nm">${esc(x.name)}<small>${x.times.length} Versuche · ${x.ppl.size} Personen</small></span><button class="chip" data-k="${esc(x.k)}">⤴️ Eigene Kategorie</button></div>`).join('') || '<div class="empty">Noch keine Einträge</div>'}</div>` : ''}
     ${c && isAdmin() ? `<button class="btn danger" id="del" ${n ? 'disabled' : ''}>Löschen${n ? ' (nicht leer)' : ''}</button>` : ''}`);
+  if ($('#toOther')) $('#toOther').onclick = () => guarded(async () => {
+    if (!confirm(`„${c.name}“ mit allen ${n} Versuchen in „Andere“ verschieben?`)) return;
+    await save(`Kategorie ${c.name} → Andere`, ctx => {
+      const oc = ctx.pub.categories.find(isOther); if (!oc) throw new Error('Kategorie „Andere“ fehlt.');
+      for (const t of ctx.pub.times) if (t.c === id) { t.c = oc.id; t.w = c.name; }
+      ctx.pub.categories = ctx.pub.categories.filter(y => y.id !== id);
+    }, {okText: 'Verschoben ✓'});
+    S.cat = (S.pub.categories.find(isOther) || {}).id; closeSheet(true); render();
+  }, $('#err'));
+  if ($('#subl')) $('#subl').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; guarded(async () => {
+    const x = otherSubs().find(y => y.k === b.dataset.k); if (!x) return;
+    const sizes = new Set(x.times.map(t => t.p.length));
+    if ([...sizes].some(k => k > 2)) throw new Error(`„${x.name}“ enthält Teamzeiten mit mehr als 2 Personen – die gibt es nur unter „Andere“.`);
+    if (sizes.size > 1) throw new Error(`„${x.name}“ mischt Einzel- und Duo-Zeiten – eine Kategorie ist entweder Einzel oder Duo. Bitte erst die Einträge angleichen.`);
+    const duo = sizes.has(2);
+    if (!confirm(`„${x.name}“ als eigene ${duo ? 'Duo-' : ''}Kategorie anlegen und alle ${x.times.length} Versuche dorthin verschieben?`)) return;
+    let nid = rid('c');
+    await save(`Andere: ${x.name} → eigene Kategorie`, ctx => {
+      const oc = ctx.pub.categories.find(isOther);
+      const mine = ctx.pub.times.filter(t => t.c === oc.id && wKey(t.w) === x.k); if (!mine.length) throw new Error('Keine Einträge mehr gefunden.');
+      ctx.pub.categories.splice(ctx.pub.categories.indexOf(oc), 0, {id: nid, name: x.name, duo});
+      for (const t of mine) { t.c = nid; delete t.w; }
+    }, {okText: 'Eigene Kategorie ✓'});
+    S.cat = nid; closeSheet(true); render();
+  }, $('#err')); };
   $('#go').onclick = () => guarded(async () => {
     const nm = $('#nm').value.trim(); if (!nm) throw new Error('Bitte Namen eingeben.');
     let newId = null;
