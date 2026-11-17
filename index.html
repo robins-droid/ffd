@@ -2602,8 +2602,7 @@ function renderHome() {
 function renderTimes() {
   const cats = S.pub.categories;
   if (!cats.find(c => c.id === S.cat)) S.cat = cats[0] && cats[0].id;
-  $('#catChips').innerHTML = cats.map(c => `<button class="chip ${c.id === S.cat ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}<small>${isOther(c) ? S.pub.times.filter(t => t.c === c.id && inYear(t.d)).length : bestTimes(c.id).length}</small></button>`).join('')
-    + (can('cats') ? '<button class="chip" data-cat="__new">＋ Kategorie</button><button class="chip" data-cat="__edit">✎ Bearbeiten</button>' : '');
+  $('#catChips').innerHTML = cats.map(c => `<button class="chip ${c.id === S.cat ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}<small>${isOther(c) ? S.pub.times.filter(t => t.c === c.id && inYear(t.d)).length : bestTimes(c.id).length}</small></button>`).join('');
   if (isOther(cats.find(c => c.id === S.cat))) return renderOther();
   const list = ranked(S.cat), top = list.slice(0, 3);
   const pod = i => top[i] ? `<div class="pod p${i + 1}"><div class="medal">${i + 1}</div><div class="nm">${esc(namesOf(top[i].p))}</div><div class="tm">${fmtT(top[i].t)}</div></div>` : '<div></div>';
