@@ -341,6 +341,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 .olbr{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;color:inherit;font:inherit;padding:5px 0;text-align:left;cursor:pointer}.olbr{align-items:flex-start}.olbr .nm{flex:1;min-width:0;white-space:normal;line-height:1.3}.olbr .tm{white-space:nowrap}.olbr .tm{font-weight:700;font-variant-numeric:tabular-nums}.olbr .md{width:22px}
 .wpicks{margin:0 0 6px}.wpicks button{font-size:13px}
 #podium.oth{display:block}.olb1{box-sizing:border-box;width:100%;min-width:0;overflow:hidden}
+.olbe{background:none;border:0;color:var(--muted);font-size:14px;padding:0 4px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -2105,6 +2106,18 @@ const wChoices = (inputSel, boxSel) => {
   $(boxSel).onclick = e => { const b = e.target.closest('[data-w]'); if (b) { $(inputSel).value = b.dataset.w; mark(); } };
   $(inputSel).addEventListener('input', mark); mark();
 };
+async function renameArt(k) {
+  const x = otherSubs().find(y => y.k === k); if (!x) return;
+  const nn = (prompt(`Art „${x.name}“ umbenennen in:`, x.name) || '').trim().replace(/[<>]/g, '').slice(0, 60);
+  if (!nn || nn === x.name) return;
+  const other = otherSubs().find(y => y.k === wKey(nn) && y.k !== k);
+  if (other && !confirm(`„${other.name}“ gibt es schon. „${x.name}“ damit zusammenführen?`)) return;
+  const target = other ? other.name : nn;
+  await guarded(async () => {
+    await save(`Andere: ${x.name} → ${target}`, ctx => { const oc = ctx.pub.categories.find(isOther); for (const t of ctx.pub.times) if (t.c === oc.id && wKey(t.w) === k) t.w = target; }, {okText: other ? 'Zusammengeführt ✓' : 'Umbenannt ✓'});
+    render();
+  });
+}
 function bestTimes(cat) {
   const best = {};
   for (const t of S.pub.times) if (t.c === cat && validT(t) && inYear(t.d)) { const k = pkey(t.p); if (!best[k] || t.t < best[k].t) best[k] = t; }
@@ -2590,7 +2603,7 @@ function renderTimes() {
   const cats = S.pub.categories;
   if (!cats.find(c => c.id === S.cat)) S.cat = cats[0] && cats[0].id;
   $('#catChips').innerHTML = cats.map(c => `<button class="chip ${c.id === S.cat ? 'on' : ''}" data-cat="${c.id}">${esc(c.name)}<small>${isOther(c) ? S.pub.times.filter(t => t.c === c.id && inYear(t.d)).length : bestTimes(c.id).length}</small></button>`).join('')
-    + (can('cats') ? '<button class="chip" data-cat="__new">＋ Kategorie</button>' : '');
+    + (can('cats') ? '<button class="chip" data-cat="__new">＋ Kategorie</button><button class="chip" data-cat="__edit">✎ Bearbeiten</button>' : '');
   if (isOther(cats.find(c => c.id === S.cat))) return renderOther();
   const list = ranked(S.cat), top = list.slice(0, 3);
   const pod = i => top[i] ? `<div class="pod p${i + 1}"><div class="medal">${i + 1}</div><div class="nm">${esc(namesOf(top[i].p))}</div><div class="tm">${fmtT(top[i].t)}</div></div>` : '<div></div>';
@@ -2617,10 +2630,10 @@ function renderOther() {
   const subs = otherSubs(true).filter(x => x.ppl.size && (!q || wKey(x.name).includes(q) || x.times.some(t => namesOf(t.p).toLowerCase().includes(q))));
   const top3 = x => { const best = {}; for (const t of x.times) if (validT(t)) { const k = pkey(t.p); if (!best[k] || t.t < best[k].t) best[k] = t; }
     const arr = Object.values(best).sort((a, b) => a.t - b.t); let pl = 0; return arr.map((t, i) => { if (i === 0 || t.t !== arr[i - 1].t) pl = i + 1; return {t, pl}; }).filter(x => x.pl <= 3); };
-  $('#podium').innerHTML = subs.length ? `<div class="olb">${subs.map(x => `<div class="card olb1"><div class="olbh"><b>${esc(x.name)}</b><small>${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'}</small></div>
+  $('#podium').innerHTML = subs.length ? `<div class="olb">${subs.map(x => `<div class="card olb1"><div class="olbh"><b>${esc(x.name)}${can('cats') ? ` <button class="olbe" data-k="${esc(x.k)}" aria-label="Umbenennen">✎</button>` : ''}</b><small>${x.ppl.size} ${x.ppl.size === 1 ? 'Person' : 'Personen'}</small></div>
     ${top3(x).map(({t, pl}) => `<button class="olbr" data-tid="${t.id}"><span class="md">${['🥇', '🥈', '🥉'][pl - 1]}</span><span class="nm">${esc(namesOf(t.p))}</span><span class="tm">${fmtT(t.t)}</span></button>`).join('')}</div>`).join('')}</div>
     <h3 class="sect" style="margin-top:14px">Alle Einträge</h3>` : '';
-  $('#podium').onclick = e => { const b = e.target.closest('[data-tid]'); if (b) attemptSheet(b.dataset.tid); };
+  $('#podium').onclick = e => { const r = e.target.closest('.olbe'); if (r) return renameArt(r.dataset.k); const b = e.target.closest('[data-tid]'); if (b) attemptSheet(b.dataset.tid); };
   $('#podium').classList.toggle('oth', !!subs.length);
   $('#timeList').innerHTML = rows.length ? rows.map(t => `<button class="row click" data-tid="${t.id}"><span class="nm">${esc(t.w || '–')}<small>${esc(namesOf(t.p))} · ${fmtD(t.d)}${t.an ? ' · annulliert' : ''}${(t.cm || []).length ? ' · 💬' : ''}</small></span><span class="tm" ${t.an ? 'style="text-decoration:line-through;color:var(--muted)"' : ''}>${fmtT(t.t)}</span></button>`).join('')
     : `<div class="empty">${q ? 'Kein Treffer' : 'Hier landen Ex-Aktionen, für die sich keine eigene Kategorie lohnt.'}</div>`;
@@ -2686,6 +2699,7 @@ $('#years').onclick = e => { const b = e.target.closest('[data-y]'); if (b) { S.
 $('#catChips').onclick = e => {
   const b = e.target.closest('[data-cat]'); if (!b) return;
   if (b.dataset.cat === '__new') return categorySheet();
+  if (b.dataset.cat === '__edit') return categorySheet(S.cat);
   S.cat = b.dataset.cat; renderTimes();
 };
 $('#timeList').onclick = e => {
@@ -3537,7 +3551,7 @@ function categorySheet(id) {
     <div class="err" id="err"></div><button class="btn pri" id="go">Speichern</button>
     ${c && isAdmin() && !isOther(c) && S.pub.categories.some(isOther) ? `<button class="btn" id="toOther">⤵️ In „Andere“ verschieben</button><p class="hint" style="margin-top:2px">Alle ${n} Versuche landen unter „Andere“ mit „${esc(c.name)}“ als Art, die Kategorie verschwindet.</p>` : ''}
     ${c && isAdmin() && isOther(c) ? `<h3 class="sect">Arten in „Andere“</h3><p class="hint" style="margin-top:0">Eine Art als eigene Kategorie herauslösen – alle ihre Versuche ziehen mit um.</p>
-      <div class="list" id="subl">${otherSubs().map(x => `<div class="row"><span class="nm">${esc(x.name)}<small>${x.times.length} Versuche · ${x.ppl.size} Personen</small></span><button class="chip" data-k="${esc(x.k)}">⤴️ Eigene Kategorie</button></div>`).join('') || '<div class="empty">Noch keine Einträge</div>'}</div>` : ''}
+      <div class="list" id="subl">${otherSubs().map(x => `<div class="row"><span class="nm">${esc(x.name)}<small>${x.times.length} Versuche · ${x.ppl.size} Personen</small></span><button class="chip" data-r="${esc(x.k)}">✎</button><button class="chip" data-k="${esc(x.k)}">⤴️ Eigene Kategorie</button></div>`).join('') || '<div class="empty">Noch keine Einträge</div>'}</div>` : ''}
     ${c && isAdmin() ? `<button class="btn danger" id="del" ${n ? 'disabled' : ''}>Löschen${n ? ' (nicht leer)' : ''}</button>` : ''}`);
   if ($('#toOther')) $('#toOther').onclick = () => guarded(async () => {
     if (!confirm(`„${c.name}“ mit allen ${n} Versuchen in „Andere“ verschieben?`)) return;
@@ -3548,7 +3562,7 @@ function categorySheet(id) {
     }, {okText: 'Verschoben ✓'});
     S.cat = (S.pub.categories.find(isOther) || {}).id; closeSheet(true); render();
   }, $('#err'));
-  if ($('#subl')) $('#subl').onclick = e => { const b = e.target.closest('[data-k]'); if (!b) return; guarded(async () => {
+  if ($('#subl')) $('#subl').onclick = e => { const r = e.target.closest('[data-r]'); if (r) return renameArt(r.dataset.r).then(() => categorySheet(id)); const b = e.target.closest('[data-k]'); if (!b) return; guarded(async () => {
     const x = otherSubs().find(y => y.k === b.dataset.k); if (!x) return;
     const sizes = new Set(x.times.map(t => t.p.length));
     if ([...sizes].some(k => k > 2)) throw new Error(`„${x.name}“ enthält Teamzeiten mit mehr als 2 Personen – die gibt es nur unter „Andere“.`);
