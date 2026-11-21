@@ -3210,6 +3210,8 @@ function ruleEditSheet(kind, id, back) {
   }, $('#err'));
 }
 function defaultCat() {
+  /* zuletzt auf diesem Gerät benutzte Kategorie, sonst 0,33 l */
+  try { const l = localStorage.getItem('ffd_lastcat'); if (l && S.pub.categories.some(x => x.id === l)) return l; } catch {}
   const c = S.pub.categories.filter(x => !x.duo && !isOther(x));
   return (c.find(x => /0,33/.test(x.name)) || c[0] || S.pub.categories[0]).id;
 }
@@ -3285,7 +3287,8 @@ function addTimeSheet(catPre) {
     more = []; $('#ppX').innerHTML = '';
     p2 = c.duo ? personPicker($('#pp2'), 'Person 2') : null;
     if (oth) drawMore();
-    $('#wF').classList.toggle('hidden', !isOther(c)); if (isOther(c)) wChoices('#w', '#wC');
+    $('#wF').classList.toggle('hidden', !isOther(c));
+    if (isOther(c)) { if (!$('#w').value) { try { $('#w').value = localStorage.getItem('ffd_lastw') || ''; } catch {} } wChoices('#w', '#wC'); }
     $('#rulesBox').querySelector('summary').textContent = '📜 Regelwerk ' + c.name + (ruleTxt('cat', c.id) ? '' : ' (noch leer)');
     $('#rulesTxt').innerHTML = ruleHtml(ruleTxt('cat', c.id));
   };
@@ -3308,6 +3311,7 @@ function addTimeSheet(catPre) {
     const extra = {...(pn ? {r, pn} : {}), ...(an ? {an: 1} : {}), ...(w ? {w} : {})};
     let by = '';
     if (!canDirect()) { by = $('#by').value.trim(); if (by.length < 2) { $('#by').focus(); throw new Error('Bitte deinen Namen eintragen.'); } try { localStorage.setItem('ffd_by', by); } catch {} }
+    try { localStorage.setItem('ffd_lastcat', catId); if (w) localStorage.setItem('ffd_lastw', w); } catch {}
     const job = {jid: rid('t'), kind: 'time', direct: canDirect(), me: S.me ? S.me.name : '', by, catId, cname: c.name, sel, t, d, x, extra, at: new Date().toISOString()};
     if (!navigator.onLine) { obAdd(job); toast('📴 Offline gespeichert – wird automatisch hochgeladen, sobald wieder Netz da ist'); }
     else try {
