@@ -343,6 +343,7 @@ body.tview .row.click,body.tview [data-mid]{pointer-events:none}
 #podium.oth{display:block}.olb1{box-sizing:border-box;width:100%;min-width:0;overflow:hidden}
 .olbe{background:none;border:0;color:var(--muted);font-size:14px;padding:0 4px;cursor:pointer}
 .olb1{cursor:pointer}.olbm{text-align:right;font-size:12.5px;color:var(--gold2);font-weight:600;margin-top:4px}
+.obbar{display:flex;align-items:center;gap:6px;width:100%;margin:10px 0 0;padding:10px 14px;border-radius:14px;border:1px solid var(--gold);background:rgba(245,197,24,.12);color:var(--text);font:inherit;font-size:14px;text-align:left;cursor:pointer}.obbar .obt{flex:1;min-width:0}.obbar .obm{white-space:nowrap;color:var(--gold2);font-weight:600;font-size:13px}
 </style>
 </head>
 <body>
@@ -2061,7 +2062,7 @@ async function loadLive() {
     await fetchInbox();
   } catch (e) {
     if (e.message === 'removed' || e.name === 'OperationError') { logout(true); toast('Zugang geändert – bitte neu anmelden'); }
-    else toast(e.message);
+    else toast(isNetErr(e) ? '📴 Offline – du siehst den zuletzt geladenen Stand' : e.message);
   }
   render();
 }
@@ -3095,6 +3096,65 @@ function newPersonForm(el, f0, l0, done, cancel) {
 }
 const resolve = (ctx, sel) => sel.map(p => p.id || createPerson(ctx, p));
 /* Besucher: neue Personen für den Vorschlag vormerken (Name nur für den Admin lesbar). */
+/* ---------- Offline: Ex-Zeiten zwischenspeichern und später hochladen ---------- */
+const isNetErr = e => !navigator.onLine || e instanceof TypeError || /Failed to fetch|NetworkError|Load failed|network/i.test((e && e.message) || '');
+const OB = 'ffd_outbox';
+const obGet = () => { try { return JSON.parse(localStorage.getItem(OB) || '[]'); } catch { return []; } };
+const obSet = l => { try { l.length ? localStorage.setItem(OB, JSON.stringify(l)) : localStorage.removeItem(OB); } catch {} drawOutbox(); };
+const obAdd = j => obSet([...obGet(), j]);
+/* Eine Ex-Zeit senden – direkt (Admin/Freigeber) oder als Vorschlag. Gibt die bisherige Bestzeit zurück. */
+async function sendTime(j) {
+  const sel = JSON.parse(JSON.stringify(j.sel));
+  if (j.direct && canDirect()) {
+    let prev = null; if (!S.names) await encNew(sel);
+    await save(`Zeit ${j.cname}: ${fmtT(j.t)}${j.extra.an ? ' (annulliert)' : ''} (${S.me.name})`, ctx => {
+      if (ctx.pub.times.some(y => y.id === j.jid)) return;   // schon da (doppeltes Senden)
+      if (!ctx.pub.categories.some(y => y.id === j.catId)) throw new Error(`Kategorie „${j.cname}“ gibt es nicht mehr.`);
+      const ids = resolve(ctx, sel);
+      const mine = ctx.pub.times.filter(y => y.c === j.catId && validT(y) && pkey(y.p) === pkey(ids));
+      prev = mine.length ? Math.min(...mine.map(y => y.t)) : null;
+      ctx.pub.times.push({id: j.jid, c: j.catId, p: ids, t: j.t, d: j.d, by: S.me.name, ...j.extra, ...(j.x ? {cm: [{by: S.me.name, x: j.x, d: j.d}]} : {})});
+    }, {quiet: true});
+    return prev;
+  }
+  const newPeople = [], ids = await proposalPeople(sel, newPeople);
+  busy(true, 'Sende …');
+  try { await submitProposal({kind: 'time', c: j.catId, p: ids, t: j.t, d: j.d, newPeople, by: j.by || j.me || 'unbekannt', x: j.x, ...j.extra}, `${j.cname}: ${fmtT(j.t)}${j.extra.an ? ' (annulliert)' : ''}`); }
+  finally { busy(false); }
+  return null;
+}
+let obBusy = false;
+async function flushOutbox(manual) {
+  const L = obGet(); if (!L.length || obBusy || !S.pub) return;
+  if (!navigator.onLine) { if (manual) toast('Noch offline – versuche es später.'); return; }
+  obBusy = true; let ok = 0, fail = 0;
+  try {
+    for (const j of L) {
+      try { await sendTime(j); ok++; obSet(obGet().filter(y => y.jid !== j.jid)); }
+      catch (e) { if (isNetErr(e)) break; fail++; obSet(obGet().map(y => y.jid === j.jid ? {...y, err: e.message} : y)); }
+    }
+  } finally { obBusy = false; }
+  if (ok) { toast(`📤 ${ok} ${ok === 1 ? 'Ex-Zeit' : 'Ex-Zeiten'} hochgeladen ✓`); render(); }
+  if (fail) toast(`⚠️ ${fail} Eintrag${fail === 1 ? '' : 'e'} konnte${fail === 1 ? '' : 'n'} nicht hochgeladen werden – oben antippen`);
+}
+function drawOutbox() {
+  const L = obGet(); let bar = $('#obBar');
+  if (!bar) { bar = document.createElement('button'); bar.id = 'obBar'; bar.className = 'obbar'; const w = $('.wrap'); if (!w) return; w.insertBefore(bar, w.firstChild); bar.onclick = outboxSheet; }
+  bar.classList.toggle('hidden', !L.length);
+  bar.innerHTML = `<span class="obt">📤 <b>${L.length} ${L.length === 1 ? 'Ex-Zeit wartet' : 'Ex-Zeiten warten'}</b> auf Upload${L.some(j => j.err) ? ' · ⚠️ Fehler' : navigator.onLine ? '' : ' · offline'}</span><span class="obm">Ansehen ›</span>`;
+}
+function outboxSheet() {
+  const L = obGet(); if (!L.length) return closeSheet(true);
+  const nm = p => p.id ? nameOf(p.id) : (p.f + (p.l ? ' ' + p.l : '') + ' (neu)');
+  openSheet(`<h2>📤 Wartende Ex-Zeiten</h2><p class="sub">Auf diesem Gerät gespeichert und noch nicht hochgeladen. Sie werden automatisch gesendet, sobald Netz da ist.</p>
+    <div class="list" id="obL">${L.map(j => `<div class="row" style="align-items:flex-start"><span class="nm" style="white-space:normal">${esc(j.sel.map(nm).join(', '))}<small>${esc(j.cname)}${j.extra.w ? ': ' + esc(j.extra.w) : ''} · ${fmtD(j.d)}${j.extra.an ? ' · annulliert' : ''} · ${j.direct ? 'direkt' : 'als Vorschlag'}${j.err ? '<br><b style="color:var(--bad)">⚠️ ' + esc(j.err) + '</b>' : ''}</small></span><span class="tm">${fmtT(j.t)}</span><span class="trash" data-j="${j.jid}">🗑</span></div>`).join('')}</div>
+    <button class="btn pri" id="obGo" ${navigator.onLine ? '' : 'disabled'}>${navigator.onLine ? 'Jetzt hochladen' : 'Offline – wartet auf Netz'}</button>`);
+  $('#obL').onclick = e => { const b = e.target.closest('[data-j]'); if (b && confirm('Diese Zeit verwerfen? Sie wird nicht hochgeladen.')) { obSet(obGet().filter(y => y.jid !== b.dataset.j)); outboxSheet(); } };
+  $('#obGo').onclick = async () => { await flushOutbox(true); outboxSheet(); };
+}
+window.addEventListener('online', () => { drawOutbox(); setTimeout(() => flushOutbox(), 1500); });
+window.addEventListener('offline', drawOutbox);
+setInterval(() => { if (obGet().length && navigator.onLine) flushOutbox(); }, 60000);
 async function proposalPeople(sel, newPeople) {
   const out = [];
   for (const p of sel) {
@@ -3246,21 +3306,16 @@ function addTimeSheet(catPre) {
     if (isOther(c) && !w) { $('#w').focus(); throw new Error('Bitte bei „Andere“ eintragen, was es war.'); }
     const d = $('#dt').value || today(), x = $('#cmt').value.trim().slice(0, 300);
     const extra = {...(pn ? {r, pn} : {}), ...(an ? {an: 1} : {}), ...(w ? {w} : {})};
-    if (canDirect()) {
-      let prev = null; if (!S.names) await encNew(sel);
-      await save(`Zeit ${c.name}: ${fmtT(t)}${an ? ' (annulliert)' : ''} (${S.me.name})`, ctx => {
-        const ids = resolve(ctx, sel);
-        const mine = ctx.pub.times.filter(y => y.c === catId && validT(y) && pkey(y.p) === pkey(ids));
-        prev = mine.length ? Math.min(...mine.map(y => y.t)) : null;
-        ctx.pub.times.push({id: rid('t'), c: catId, p: ids, t, d, by: S.me.name, ...extra, ...(x ? {cm: [{by: S.me.name, x, d: today()}]} : {})});
-      }, {quiet: true});
-      toast(an ? 'Gespeichert ✓ (annulliert – nur im Profil)' : isOther(c) ? 'Gespeichert ✓' : prev == null ? 'Gespeichert ✓ Erste Zeit in dieser Kategorie' : t < prev ? 'Neue Bestzeit! 🍺 vorher ' + fmtT(prev) : 'Gespeichert ✓ Bestzeit bleibt ' + fmtT(prev));
-    } else {
-      const by = $('#by').value.trim(); if (by.length < 2) { $('#by').focus(); throw new Error('Bitte deinen Namen eintragen.'); } try { localStorage.setItem('ffd_by', by); } catch {}
-      const newPeople = [], ids = await proposalPeople(sel, newPeople);
-      busy(true, 'Sende …');
-      try { await submitProposal({kind: 'time', c: catId, p: ids, t, d, newPeople, by, x, ...extra}, `${c.name}: ${fmtT(t)}${an ? ' (annulliert)' : ''}`); } finally { busy(false); }
-      toast('Eingereicht ✓ Zählt nach Bestätigung');
+    let by = '';
+    if (!canDirect()) { by = $('#by').value.trim(); if (by.length < 2) { $('#by').focus(); throw new Error('Bitte deinen Namen eintragen.'); } try { localStorage.setItem('ffd_by', by); } catch {} }
+    const job = {jid: rid('t'), kind: 'time', direct: canDirect(), me: S.me ? S.me.name : '', by, catId, cname: c.name, sel, t, d, x, extra, at: new Date().toISOString()};
+    if (!navigator.onLine) { obAdd(job); toast('📴 Offline gespeichert – wird automatisch hochgeladen, sobald wieder Netz da ist'); }
+    else try {
+      const prev = await sendTime(job);
+      toast(!job.direct ? 'Eingereicht ✓ Zählt nach Bestätigung' : an ? 'Gespeichert ✓ (annulliert – nur im Profil)' : isOther(c) ? 'Gespeichert ✓' : prev == null ? 'Gespeichert ✓ Erste Zeit in dieser Kategorie' : t < prev ? 'Neue Bestzeit! 🍺 vorher ' + fmtT(prev) : 'Gespeichert ✓ Bestzeit bleibt ' + fmtT(prev));
+    } catch (e) {
+      if (!isNetErr(e)) throw e;
+      obAdd(job); toast('📴 Kein Netz – lokal gespeichert, wird automatisch hochgeladen');
     }
     sheetClose = null; S.cat = catId; closeSheet(true); render();
   }, $('#err'));
@@ -4628,6 +4683,7 @@ async function start() {
       } else localStorage.removeItem('ffd_auth');
     }
   } catch {}
+  drawOutbox(); setTimeout(() => flushOutbox(), 2000);
 }
 start();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
